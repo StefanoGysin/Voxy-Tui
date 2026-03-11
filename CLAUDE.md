@@ -31,6 +31,10 @@ Two entry points:
 ## Known TODOs
 - ANSI toolkit (`src/core/ansi.ts`) não está no barrel público (`src/core/index.ts`) ainda — resolver na Sessão 4
 
+## Limitações conhecidas (a resolver na Sessão 6)
+- Text.alignLine: usa line.length em vez de measureWidth(stripAnsi()) — afeta center/right com ANSI
+- Border.render: usa padEnd() sem ANSI awareness — afeta padding com texto colorido
+
 ## Session Plan (8 sessions)
 1. **Session 1**: Project scaffolding (this session)
 2. **Session 2**: ANSI engine + Terminal abstraction
