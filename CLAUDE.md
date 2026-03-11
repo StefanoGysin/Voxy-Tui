@@ -110,6 +110,17 @@ input.onChange?: (text: string) => void
 // ChatLayout distribui: messagesHeight + inputHeight + statusHeight = height
 ```
 
+### TUI
+```typescript
+// TUI não lida com stdin/raw mode — responsabilidade da camada de aplicação
+new TUI(options?: TUIOptions)  // terminal?: Terminal, fps?: number
+tui.start(): void   // inicia render loop + listener de resize
+tui.stop(): void    // para tudo, idempotente
+tui.scheduleRender(): void
+tui.renderNow(): void
+tui.layout: ChatLayout  // acesso direto ao layout
+```
+
 ---
 
 ## Limitações conhecidas
@@ -135,8 +146,9 @@ input.onChange?: (text: string) => void
 | 4 — Core Components | `feat/session-4-components` | ✅ merged | 43 |
 | 5 — TextInput + Stack | `feat/session-5-input` | ✅ merged | 61 |
 | 6 — Chat Kit básico | `feat/session-6-chat` | ✅ merged | 92 |
-| **7 — Markdown + CodeBlock** | `feat/session-7-markdown` | 🔄 próxima | — |
-| 8 — Demo + Integração | `feat/session-8-demo` | ⏳ | — |
+| **7 — Markdown + CodeBlock** | `feat/session-7-markdown` | ✅ merged | 128 |
+| **8 — TUI Class + Demo** | `feat/session-8-demo` | ✅ merged | 134 |
+| 9 — Componentes Avançados | `feat/session-9-advanced` | ⏳ | — |
 
 ### Sessão 7 — escopo planejado
 Transformar os placeholders restantes em `src/chat/`:
@@ -179,10 +191,10 @@ src/
 │   ├── input-bar.ts     — TextInput + separador ─
 │   ├── status-bar.ts    — spinner + model + tokens (1 linha)
 │   ├── chat-layout.ts   — compositor MessageList+InputBar+StatusBar
-│   ├── tool-call.ts     — PLACEHOLDER (Sessão 7)
-│   ├── markdown.ts      — PLACEHOLDER (Sessão 7)
-│   ├── code-block.ts    — PLACEHOLDER (Sessão 7)
-│   ├── thinking-block.ts — PLACEHOLDER (Sessão 7)
+│   ├── tool-call.ts     — display de tool use (nome, input, output, status)
+│   ├── markdown.ts      — render Markdown com marked lexer
+│   ├── code-block.ts    — syntax highlight com cli-highlight
+│   ├── thinking-block.ts — bloco colapsável para chain-of-thought
 │   └── index.ts
 ├── utils/
 │   ├── wrap.ts          — wrapText(text, width): string[]
@@ -191,7 +203,11 @@ src/
 │   ├── width.ts         — measureWidth (string-width wrapper)
 │   ├── input-parser.ts  — parseKey RawKey→KeyEvent, bracketed paste
 │   └── index.ts
+├── tui.ts               — TUI class (compositor top-level)
 ├── test/
 │   └── setup.ts         — MockTerminal
 └── index.ts             — barrel público principal
+
+examples/
+└── demo.ts              — demo animado (bun run examples/demo.ts)
 ```
