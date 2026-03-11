@@ -1,6 +1,8 @@
 import type { Component } from '../core/component';
 import { RESET } from '../core/ansi';
 import { wrapText } from '../utils/wrap';
+import { measureWidth } from '../utils/width';
+import { stripAnsi } from '../utils/strip-ansi';
 
 export interface TextOptions {
   /** Prefixo ANSI de cor/estilo (ex: FG_CYAN + BOLD). Default: sem cor */
@@ -40,9 +42,9 @@ export class Text implements Component {
 
   private alignLine(line: string, width: number, align: 'left' | 'center' | 'right'): string {
     if (align === 'left') return line;
-    const len = line.length;
-    if (len >= width) return line;
-    const pad = width - len;
+    const visualLen = measureWidth(stripAnsi(line));
+    if (visualLen >= width) return line;
+    const pad = width - visualLen;
     if (align === 'right') return ' '.repeat(pad) + line;
     const left = Math.floor(pad / 2);
     const right = pad - left;
