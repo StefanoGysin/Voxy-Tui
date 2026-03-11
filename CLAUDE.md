@@ -4,43 +4,194 @@
 TypeScript TUI library for LLM CLI agents (Claude Code, Gemini CLI, voxy-cli).
 Imperative paradigm: `new Component()`, `.render()`, `.update()` — NO React, NO Ink, NO Yoga.
 
+---
+
+## Workflow — PromptForge Methodology
+
+Este projeto usa uma metodologia chamada **PromptForge**:
+
+1. **Stefano + Claude (conversa)** — planejam cada sessão juntos, analisam o trabalho anterior, identificam bugs, e forjam um prompt preciso.
+2. **Claude Code (execução)** — recebe o prompt e executa a sessão de forma autônoma.
+3. **Verificação rigorosa** — após execução, Claude (conversa) lê os arquivos reais (não apenas o resumo do Claude Code) e valida antes de aprovar o commit.
+
+### Regras para Claude Code
+
+- **Nunca criar arquivos fora de `src/`** a não ser que explicitamente pedido. Rascunhos, prompts, análises → pasta `.ai-work/` (está no `.gitignore`, nunca commitada).
+- **Antes de cada commit**: `bun run typecheck` + `bun run lint` + `bun test` devem passar com 0 erros.
+- **Commits**: seguir Conventional Commits em português (ver formato abaixo).
+- **Branches**: cada sessão tem sua própria branch `feat/session-N-nome`, depois merge para `main`.
+- **NÃO modificar** arquivos placeholder de sessões futuras (ex: `tool-call.ts`, `markdown.ts` são da Sessão 7 — não tocar na Sessão 6).
+
+### Pasta `.ai-work/`
+
+Área de trabalho compartilhada entre Stefano e Claude (conversa). Contém:
+- `PROMPT_SESSION_N.md` — prompt forjado para cada sessão
+- Rascunhos, análises, notas temporárias
+
+**Nunca commitada.** Está no `.gitignore`.
+
+### Formato de commit obrigatório
+
+```
+feat(escopo): descrição em português
+
+- detalhe 1
+- detalhe 2
+
+🤖 Gerado com Voxy & claude-sonnet-4-6
+```
+
+---
+
 ## Runtime & Build
+
 - **Dev runtime**: Bun (tests, scripts)
 - **Build target**: Node.js 18+ (via tsup)
 - **Module system**: Dual ESM + CJS (tsup `format: ['esm', 'cjs']`)
 - **TypeScript**: strict mode, isolatedDeclarations enabled
 
 ## Module Resolution
-- `module: "ESNext"` + `moduleResolution: "Bundler"` in tsconfig
-- Reason: tsup uses esbuild as bundler; Bundler resolution doesn't require `.js` extensions in imports
-- NO path aliases yet — will add `@core/*`, `@chat/*` in Session 2 with `tsup esbuildOptions.alias`
+
+- `module: "ESNext"` + `moduleResolution: "Bundler"` em tsconfig
+- Motivo: tsup usa esbuild; resolução Bundler não exige extensões `.js` em imports
+- Sem path aliases (ex: `@core/*`) — não suportado por esbuild sem config extra
 
 ## Package Exports
-Two entry points:
+
+Dois entry points:
 - `.` → `src/index.ts` (core, components, layout, utils)
 - `./chat` → `src/chat/index.ts` (chat-specific components)
 
-## Key Interfaces (src/core/component.ts)
-- `KeyEvent`: key, ctrl, meta, shift, raw
-- `Component`: render(w,h)→string[], handleKey?, onFocus?, onBlur?, minHeight?, focusable?
+## Key Interfaces (`src/core/component.ts`)
+
+```typescript
+interface KeyEvent { key: string; ctrl: boolean; meta: boolean; shift: boolean; raw: string; }
+interface Component {
+  render(width: number, height: number): string[];
+  handleKey?(event: KeyEvent): boolean;
+  onFocus?(): void; onBlur?(): void;
+  minHeight?(): number; focusable?: boolean;
+}
+```
 
 ## Testing
-- Bun test runner with preload: `src/test/setup.ts`
-- `MockTerminal` class implements `Terminal` interface for testing
 
-## Known TODOs
-- ANSI toolkit (`src/core/ansi.ts`) não está no barrel público (`src/core/index.ts`) ainda — resolver na Sessão 4
+- Bun test runner com preload: `src/test/setup.ts`
+- `MockTerminal` implementa interface `Terminal` para testes sem TTY real
+- Fake timers: `jest.useFakeTimers()` requer Bun ≥ 1.3.10 (projeto usa 1.3.10+)
+- Testes com `setInterval` (ex: StatusBar): sempre usar `afterEach(() => instance.dispose())` para evitar processo pendurado
 
-## Limitações conhecidas (a resolver na Sessão 6)
-- Text.alignLine: usa line.length em vez de measureWidth(stripAnsi()) — afeta center/right com ANSI
-- Border.render: usa padEnd() sem ANSI awareness — afeta padding com texto colorido
+---
 
-## Session Plan (8 sessions)
-1. **Session 1**: Project scaffolding (this session)
-2. **Session 2**: ANSI engine + Terminal abstraction
-3. **Session 3**: Diff renderer + RenderScheduler
-4. **Session 4**: Core components (Text, Spinner, TextInput, Scrollable, Border)
-5. **Session 5**: Layout system (Stack)
-6. **Session 6**: Chat components (MessageList, InputBar, StatusBar, ToolCall)
-7. **Session 7**: Markdown + CodeBlock rendering
-8. **Session 8**: ChatLayout compositor + integration tests
+## APIs críticas (armadilhas de implementação)
+
+### Spinner
+```typescript
+// Construtor POSICIONAL — NÃO é options object:
+new Spinner(label: string = '', onUpdate?: () => void)
+spinner.start(label?: string): void
+spinner.stop(): void
+// render() retorna [] quando inativo
+```
+
+### TextInput
+```typescript
+// minHeight() === this.lines.length (não aceita height no render — ignora o parâmetro)
+// render() sempre retorna exactly this.lines.length linhas
+input.onSubmit?: (text: string) => void
+input.onChange?: (text: string) => void
+```
+
+### MessageList / ChatLayout
+```typescript
+// render(width, height) retorna EXATAMENTE height linhas:
+// — padding de linhas vazias no topo se conteúdo < height
+// — slice se conteúdo > height (com scrollOffset)
+// ChatLayout distribui: messagesHeight + inputHeight + statusHeight = height
+```
+
+---
+
+## Limitações conhecidas
+
+| Componente | Limitação | Status |
+|---|---|---|
+| `Border.render` | `padEnd()` sem ANSI awareness — padding errado com texto colorido | Pendente |
+| `Stack` (horizontal) | `padEnd()` sem ANSI awareness em colunas | Pendente |
+| `TextInput` | `cursorCol` em code-unit index (não visual) — cursor pode deslocar com emoji wide | Aceitável |
+| `Scrollable` | Ainda placeholder | Sessão futura |
+
+**Resolvidos**: `Text.alignLine` — usava `line.length`, agora usa `measureWidth(stripAnsi(line))` ✓
+
+---
+
+## Session Plan
+
+| Sessão | Branch | Status | Testes |
+|---|---|---|---|
+| 1 — Scaffolding | `feat/session-1-*` | ✅ merged | — |
+| 2 — ANSI + Terminal | `feat/session-2-core-io` | ✅ merged | 5 |
+| 3 — Renderer + Scheduler | `feat/session-3-scheduler` | ✅ merged | 12 |
+| 4 — Core Components | `feat/session-4-components` | ✅ merged | 43 |
+| 5 — TextInput + Stack | `feat/session-5-input` | ✅ merged | 61 |
+| 6 — Chat Kit básico | `feat/session-6-chat` | ✅ merged | 92 |
+| **7 — Markdown + CodeBlock** | `feat/session-7-markdown` | 🔄 próxima | — |
+| 8 — Demo + Integração | `feat/session-8-demo` | ⏳ | — |
+
+### Sessão 7 — escopo planejado
+Transformar os placeholders restantes em `src/chat/`:
+- `markdown.ts` — render Markdown com `marked` lexer
+- `code-block.ts` — syntax highlight com `cli-highlight`
+- `thinking-block.ts` — bloco colapsável para chain-of-thought
+- `tool-call.ts` — display de tool use (nome, input, output, status)
+
+### Sessão 8 — escopo planejado
+- `TUI` class — compositor top-level (wraps Renderer + Scheduler + ChatLayout)
+- Testes de integração end-to-end
+- Demo funcional com mensagens reais
+
+---
+
+## Estrutura de arquivos atual
+
+```
+src/
+├── core/
+│   ├── component.ts     — KeyEvent, Component interfaces
+│   ├── ansi.ts          — constantes e funções ANSI completas
+│   ├── terminal.ts      — Terminal interface + ProcessTerminal
+│   ├── renderer.ts      — diff line-level + synchronized output
+│   ├── scheduler.ts     — RenderScheduler 30fps com dirty flag
+│   └── index.ts         — barrel público
+├── components/
+│   ├── text.ts          — Text com wrap/align/color
+│   ├── spinner.ts       — Spinner braille com onUpdate callback
+│   ├── text-input.ts    — MultilineEditor completo (undo, kill ring, Emacs)
+│   ├── border.ts        — Border single/double/rounded
+│   ├── scrollable.ts    — PLACEHOLDER
+│   └── index.ts
+├── layout/
+│   ├── stack.ts         — Stack vertical + horizontal
+│   └── index.ts
+├── chat/
+│   ├── types.ts         — ChatMessage, MessageRole
+│   ├── message-list.ts  — lista scrollável com sticky bottom
+│   ├── input-bar.ts     — TextInput + separador ─
+│   ├── status-bar.ts    — spinner + model + tokens (1 linha)
+│   ├── chat-layout.ts   — compositor MessageList+InputBar+StatusBar
+│   ├── tool-call.ts     — PLACEHOLDER (Sessão 7)
+│   ├── markdown.ts      — PLACEHOLDER (Sessão 7)
+│   ├── code-block.ts    — PLACEHOLDER (Sessão 7)
+│   ├── thinking-block.ts — PLACEHOLDER (Sessão 7)
+│   └── index.ts
+├── utils/
+│   ├── wrap.ts          — wrapText(text, width): string[]
+│   ├── truncate.ts      — truncate com ellipsis
+│   ├── strip-ansi.ts    — stripAnsi + ANSI_REGEX
+│   ├── width.ts         — measureWidth (string-width wrapper)
+│   ├── input-parser.ts  — parseKey RawKey→KeyEvent, bracketed paste
+│   └── index.ts
+├── test/
+│   └── setup.ts         — MockTerminal
+└── index.ts             — barrel público principal
+```
