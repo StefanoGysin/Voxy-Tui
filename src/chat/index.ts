@@ -1,3 +1,4 @@
+export type { ChatMessage, MessageRole } from './types';
 export { MessageList } from './message-list';
 export { InputBar } from './input-bar';
 export { StatusBar } from './status-bar';
