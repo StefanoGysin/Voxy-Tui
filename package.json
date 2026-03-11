@@ -23,6 +23,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit --strict",
+    "demo": "bun run examples/demo.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
