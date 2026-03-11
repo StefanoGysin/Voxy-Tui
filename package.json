@@ -4,14 +4,12 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
     },
     "./chat": {
-      "types": "./dist/chat/index.d.ts",
-      "import": "./dist/chat/index.js",
-      "require": "./dist/chat/index.cjs"
+      "import": { "types": "./dist/chat/index.d.ts", "default": "./dist/chat/index.js" },
+      "require": { "types": "./dist/chat/index.d.cts", "default": "./dist/chat/index.cjs" }
     }
   },
   "files": [

@@ -5,3 +5,4 @@ export { ToolCall } from './tool-call';
 export { Markdown } from './markdown';
 export { CodeBlock } from './code-block';
 export { ChatLayout } from './chat-layout';
+export { ThinkingBlock } from './thinking-block';

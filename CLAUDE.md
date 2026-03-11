@@ -28,6 +28,9 @@ Two entry points:
 - Bun test runner with preload: `src/test/setup.ts`
 - `MockTerminal` class implements `Terminal` interface for testing
 
+## Known TODOs
+- ANSI toolkit (`src/core/ansi.ts`) não está no barrel público (`src/core/index.ts`) ainda — resolver na Sessão 4
+
 ## Session Plan (8 sessions)
 1. **Session 1**: Project scaffolding (this session)
 2. **Session 2**: ANSI engine + Terminal abstraction
