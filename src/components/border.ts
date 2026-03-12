@@ -1,4 +1,5 @@
 import type { Component } from '../core/component';
+import { padEndAnsi } from '../utils/width';
 
 export type BorderStyle = 'single' | 'double' | 'rounded';
 
@@ -27,7 +28,7 @@ export class Border implements Component {
     const top = c.tl + topFill.slice(0, innerWidth) + c.tr;
 
     const middle = childLines.map(line => {
-      const padded = line.padEnd(innerWidth).slice(0, innerWidth);
+      const padded = padEndAnsi(line, innerWidth);
       return c.v + padded + c.v;
     });
 

@@ -153,16 +153,35 @@ tui.renderNow(): void
 tui.layout: ChatLayout  // acesso direto ao layout
 ```
 
+### Scrollable
+```typescript
+new Scrollable(child: Component)
+scrollable.scrollUp(lines?: number): void    // default: 1
+scrollable.scrollDown(lines?: number): void  // default: 1
+scrollable.scrollToTop(): void
+scrollable.scrollToBottom(): void
+scrollable.getScrollOffset(): number
+// handleKey: 'pageup'/'pagedown' = scroll por (lastHeight - 1) linhas
+// render() passa height=10000 para o filho — filho deve renderizar todo conteúdo
+```
+
+### `padEndAnsi` (novo utilitário)
+```typescript
+import { padEndAnsi } from 'voxy-tui';
+// Pad ANSI-aware: mede largura visual, adiciona espaços até targetWidth
+padEndAnsi(line: string, targetWidth: number): string
+```
+
 ---
 
 ## Limitações conhecidas
 
 | Componente | Limitação | Status |
 |---|---|---|
-| `Border.render` | `padEnd()` sem ANSI awareness — padding errado com texto colorido | Pendente |
-| `Stack` (horizontal) | `padEnd()` sem ANSI awareness em colunas | Pendente |
+| `Border.render` | `padEnd()` sem ANSI awareness — padding errado com texto colorido | ✅ Resolvido (Session 10) |
+| `Stack` (horizontal) | `padEnd()` sem ANSI awareness em colunas | ✅ Resolvido (Session 10) |
 | `TextInput` | `cursorCol` em code-unit index (não visual) — cursor pode deslocar com emoji wide | Aceitável |
-| `Scrollable` | Ainda placeholder | Sessão futura |
+| `Scrollable` | Ainda placeholder | ✅ Implementado (Session 10) |
 
 **Resolvidos**: `Text.alignLine` — usava `line.length`, agora usa `measureWidth(stripAnsi(line))` ✓
 
@@ -181,7 +200,8 @@ tui.layout: ChatLayout  // acesso direto ao layout
 | **7 — Markdown + CodeBlock** | `feat/session-7-markdown` | ✅ merged | 128 |
 | **8 — TUI Class + Demo** | `feat/session-8-demo` | ✅ merged | 134 |
 | **9 — Componentes Avançados** | `feat/session-9-advanced` | ✅ merged | 168 |
-| 10 — TBD | — | ⏳ | — |
+| **10 — Bugfixes + Scrollable** | `feat/session-10-fixes` | ✅ merged | 190 |
+| 11 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado
 Transformar os placeholders restantes em `src/chat/`:

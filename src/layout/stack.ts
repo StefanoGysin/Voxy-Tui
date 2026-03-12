@@ -1,4 +1,5 @@
 import type { Component } from '../core/component';
+import { padEndAnsi } from '../utils/width';
 
 export type StackDirection = 'vertical' | 'horizontal';
 
@@ -44,7 +45,7 @@ export class Stack implements Component {
         const w = ci === this.components.length - 1
           ? width - colWidth * (this.components.length - 1)
           : colWidth;
-        return line.padEnd(w).slice(0, w);
+        return padEndAnsi(line, w);
       });
       result.push(row.join(''));
     }
