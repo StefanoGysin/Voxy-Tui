@@ -70,6 +70,13 @@ export class Dropdown implements Component {
     return this.filteredOptions;
   }
 
+  /** Número de linhas que render() retornaria no estado atual. */
+  visibleLineCount(): number {
+    if (!this.visible) return 0;
+    if (this.filteredOptions.length === 0) return 1;
+    return Math.min(this.filteredOptions.length, this.maxVisible);
+  }
+
   handleKey(event: KeyEvent): boolean {
     if (!this.visible) return false;
 
