@@ -170,6 +170,29 @@ describe('Dropdown', () => {
     expect(dd.getSelected()).toBeNull();
   });
 
+  // visibleLineCount
+  it('visibleLineCount() retorna 0 quando oculto', () => {
+    expect(dd.visibleLineCount()).toBe(0);
+  });
+
+  it('visibleLineCount() retorna número correto quando visível', () => {
+    dd.show();
+    expect(dd.visibleLineCount()).toBe(5);
+  });
+
+  it('visibleLineCount() retorna 1 quando filtro sem match', () => {
+    dd.show();
+    dd.setFilter('zzz');
+    expect(dd.visibleLineCount()).toBe(1);
+  });
+
+  it('visibleLineCount() respeita maxVisible', () => {
+    const small = new Dropdown({ maxVisible: 2 });
+    small.setOptions(OPTIONS);
+    small.show();
+    expect(small.visibleLineCount()).toBe(2);
+  });
+
   // scroll interno
   it('scroll ajusta quando selectedIndex ultrapassa maxVisible', () => {
     const small = new Dropdown({ maxVisible: 2 });
