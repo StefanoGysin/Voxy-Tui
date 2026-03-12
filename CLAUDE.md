@@ -20,6 +20,7 @@ Este projeto usa uma metodologia chamada **PromptForge**:
 - **Antes de cada commit**: `bun run typecheck` + `bun run lint` + `bun test` devem passar com 0 erros.
 - **Commits**: seguir Conventional Commits em português (ver formato abaixo).
 - **Branches**: cada sessão tem sua própria branch `feat/session-N-nome`, depois merge para `main`.
+- **Merge**: sempre usar `--no-ff` (merge commit) ao mergear branches no `main`. Nunca fast-forward.
 - **NÃO modificar** arquivos placeholder de sessões futuras (ex: `tool-call.ts`, `markdown.ts` são da Sessão 7 — não tocar na Sessão 6).
 
 ### Pasta `.ai-work/`
