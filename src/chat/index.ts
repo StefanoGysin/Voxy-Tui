@@ -9,3 +9,6 @@ export { Markdown } from './markdown';
 export { CodeBlock, highlightCode } from './code-block';
 export { ChatLayout } from './chat-layout';
 export { ThinkingBlock } from './thinking-block';
+export { StreamingThinkingIndicator } from './streaming-thinking-indicator';
+export { ToolActivityLog } from './tool-activity-log';
+export type { ToolActivityLogOptions } from './tool-activity-log';

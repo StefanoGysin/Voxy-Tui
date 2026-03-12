@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, it } from 'bun:test';
 import { InputBar } from './input-bar';
 import { stripAnsi } from '../utils/strip-ansi';
 
@@ -66,5 +66,94 @@ describe('InputBar', () => {
     bar.onFocus();
     bar.handleKey({ key: 'a', ctrl: false, meta: false, shift: false, raw: 'a' });
     expect(bar.getValue()).toBe('a');
+  });
+});
+
+describe('InputBar — histórico', () => {
+  let bar: InputBar;
+
+  afterEach(() => { bar = undefined as unknown as InputBar; });
+
+  function submit(b: InputBar, text: string): void {
+    // Simular submit: setar valor e pressionar Enter
+    b['input'].setValue(text);
+    b['input']['onSubmit']?.(text);
+  }
+
+  it('↑ sem histórico não faz nada', () => {
+    bar = new InputBar();
+    const handled = bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(handled).toBe(false);
+  });
+
+  it('↑ após 1 submit mostra último item', () => {
+    bar = new InputBar();
+    submit(bar, 'olá');
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(bar.getValue()).toBe('olá');
+  });
+
+  it('↑ ↑ navega dois itens', () => {
+    bar = new InputBar();
+    submit(bar, 'primeiro');
+    submit(bar, 'segundo');
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(bar.getValue()).toBe('segundo');
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(bar.getValue()).toBe('primeiro');
+  });
+
+  it('↑ no início do histórico não sai do limite', () => {
+    bar = new InputBar();
+    submit(bar, 'único');
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(bar.getValue()).toBe('único');
+  });
+
+  it('↓ após ↑ restaura rascunho', () => {
+    bar = new InputBar();
+    submit(bar, 'histórico');
+    // Usuário digita rascunho
+    bar['input'].setValue('rascunho parcial');
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    bar.handleKey({ key: 'down', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(bar.getValue()).toBe('rascunho parcial');
+  });
+
+  it('não adiciona duplicatas consecutivas', () => {
+    bar = new InputBar();
+    submit(bar, 'repetido');
+    submit(bar, 'repetido');
+    expect(bar.getHistory()).toHaveLength(1);
+  });
+
+  it('não adiciona entrada vazia ao histórico', () => {
+    bar = new InputBar();
+    submit(bar, '   ');
+    expect(bar.getHistory()).toHaveLength(0);
+  });
+
+  it('getHistory() retorna cópia imutável', () => {
+    bar = new InputBar();
+    submit(bar, 'item');
+    const h = bar.getHistory();
+    h.push('invasão');
+    expect(bar.getHistory()).toHaveLength(1);
+  });
+
+  it('setHistory() carrega histórico e permite navegação', () => {
+    bar = new InputBar();
+    bar.setHistory(['anterior1', 'anterior2']);
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(bar.getValue()).toBe('anterior2');
+  });
+
+  it('clearHistory() limpa tudo', () => {
+    bar = new InputBar();
+    submit(bar, 'msg');
+    bar.clearHistory();
+    const handled = bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '' });
+    expect(handled).toBe(false);
   });
 });

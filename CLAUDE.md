@@ -110,6 +110,38 @@ input.onChange?: (text: string) => void
 // ChatLayout distribui: messagesHeight + inputHeight + statusHeight = height
 ```
 
+### StreamingThinkingIndicator
+```typescript
+new StreamingThinkingIndicator()
+indicator.start(): void          // inicia timer de 1s
+indicator.stop(): void           // para timer, render() volta a []
+indicator.dispose(): void        // alias de stop()
+indicator.isActive(): boolean
+indicator.getElapsedSeconds(): number
+indicator.onUpdate?: () => void  // callback a cada 1s
+// render() retorna [] quando inativo, 1 linha quando ativo
+```
+
+### ToolActivityLog
+```typescript
+new ToolActivityLog(options?: { maxVisible?: number })  // default maxVisible=10
+log.addTool(id: string, name: string, label?: string): void
+log.updateTool(id: string, status: ToolStatus, label?: string): void
+log.clear(): void
+log.dispose(): void
+log.onUpdate?: () => void  // callback a cada FRAME_INTERVAL_MS enquanto há running
+// render() retorna N linhas (até maxVisible), 1 por entry
+```
+
+### InputBar — histórico (Sessão 9)
+```typescript
+// ↑/↓ navegam histórico quando input é single-line (cursor em row 0)
+bar.getHistory(): string[]              // cópia do histórico
+bar.setHistory(entries: string[]): void // carrega histórico de sessão anterior
+bar.clearHistory(): void
+// Duplicatas consecutivas são ignoradas. Entradas vazias (trim) não são salvas.
+```
+
 ### TUI
 ```typescript
 // TUI não lida com stdin/raw mode — responsabilidade da camada de aplicação
@@ -148,7 +180,8 @@ tui.layout: ChatLayout  // acesso direto ao layout
 | 6 — Chat Kit básico | `feat/session-6-chat` | ✅ merged | 92 |
 | **7 — Markdown + CodeBlock** | `feat/session-7-markdown` | ✅ merged | 128 |
 | **8 — TUI Class + Demo** | `feat/session-8-demo` | ✅ merged | 134 |
-| 9 — Componentes Avançados | `feat/session-9-advanced` | ⏳ | — |
+| **9 — Componentes Avançados** | `feat/session-9-advanced` | ✅ merged | 168 |
+| 10 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado
 Transformar os placeholders restantes em `src/chat/`:
@@ -188,13 +221,15 @@ src/
 ├── chat/
 │   ├── types.ts         — ChatMessage, MessageRole
 │   ├── message-list.ts  — lista scrollável com sticky bottom
-│   ├── input-bar.ts     — TextInput + separador ─
+│   ├── input-bar.ts     — TextInput + separador ─ + histórico ↑/↓
 │   ├── status-bar.ts    — spinner + model + tokens (1 linha)
 │   ├── chat-layout.ts   — compositor MessageList+InputBar+StatusBar
 │   ├── tool-call.ts     — display de tool use (nome, input, output, status)
 │   ├── markdown.ts      — render Markdown com marked lexer
 │   ├── code-block.ts    — syntax highlight com cli-highlight
 │   ├── thinking-block.ts — bloco colapsável para chain-of-thought
+│   ├── streaming-thinking-indicator.ts  — indicador "◆ Pensando... (Xs)"
+│   ├── tool-activity-log.ts             — log compacto de tool calls
 │   └── index.ts
 ├── utils/
 │   ├── wrap.ts          — wrapText(text, width): string[]
