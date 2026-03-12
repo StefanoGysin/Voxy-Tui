@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import type { Component } from '../core/component';
 import { Border } from './border';
 import { Text } from './text';
+import { FG_GREEN, RESET } from '../core/ansi';
+import { stripAnsi } from '../utils/strip-ansi';
+import { measureWidth } from '../utils/width';
 
 describe('Border', () => {
   test('adds top and bottom lines', () => {
@@ -23,5 +27,29 @@ describe('Border', () => {
     const b = new Border(new Text('x'), 'single', 'Title');
     const lines = b.render(30, 5);
     expect(lines[0]).toContain('Title');
+  });
+});
+
+class ColoredLine implements Component {
+  constructor(private text: string) {}
+  render(_w: number, _h: number): string[] {
+    return [`${FG_GREEN}${this.text}${RESET}`];
+  }
+}
+
+describe('Border com texto colorido (ANSI)', () => {
+  test('linha com ANSI tem largura visual correta', () => {
+    const b = new Border(new ColoredLine('hello'));
+    const lines = b.render(20, 3);
+    const middle = lines[1];
+    const visual = measureWidth(stripAnsi(middle));
+    expect(visual).toBe(20);
+  });
+
+  test('padding correto — bordas alinhadas com ANSI', () => {
+    const b = new Border(new ColoredLine('hi'));
+    const lines = b.render(10, 3);
+    const visual = measureWidth(stripAnsi(lines[1]));
+    expect(visual).toBe(10);
   });
 });
