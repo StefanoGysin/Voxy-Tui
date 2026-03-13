@@ -1,6 +1,7 @@
 import { ProcessTerminal, Renderer, RenderScheduler } from './core';
 import type { Terminal } from './core';
-import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, ERASE_SCREEN, cursorTo } from './core/ansi';
+import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, ERASE_SCREEN, cursorTo,
+         ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING } from './core/ansi';
 import { ChatLayout } from './chat/chat-layout';
 
 export interface TUIOptions {
@@ -30,8 +31,9 @@ export class TUI {
     if (this.running) return;
     this.running = true;
 
-    // Entrar na tela alternativa — impede contaminação do scrollback
+    // Tela alternativa + mouse tracking
     this.terminal.write(ENTER_ALT_SCREEN + ERASE_SCREEN + cursorTo(1, 1));
+    this.terminal.write(ENABLE_MOUSE_TRACKING);
 
     this.resizeListener = () => {
       this.renderer.invalidate();
@@ -49,7 +51,8 @@ export class TUI {
     this.scheduler.dispose();
     this.layout.statusBar.dispose();
 
-    // Restaurar tela principal
+    // Desabilitar mouse tracking ANTES de restaurar tela
+    this.terminal.write(DISABLE_MOUSE_TRACKING);
     this.terminal.write(EXIT_ALT_SCREEN);
 
     if (this.resizeListener) {
