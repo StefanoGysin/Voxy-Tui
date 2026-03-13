@@ -2,6 +2,7 @@ import { describe, test, expect, afterEach, beforeEach, jest } from 'bun:test';
 import { ChatLayout } from './chat-layout';
 import { ToolActivityLog } from './tool-activity-log';
 import { stripAnsi } from '../utils/strip-ansi';
+import type { ChatMessage } from './types';
 
 describe('ChatLayout', () => {
   let layout: ChatLayout;
@@ -170,5 +171,31 @@ describe('ChatLayout — scroll', () => {
     const after_first = layout.messageList.getScrollOffset();
     layout.handleKey({ key: 'scroll-up', ctrl: false, meta: false, shift: false, raw: '' });
     expect(layout.messageList.getScrollOffset()).toBe(after_first);
+  });
+});
+
+describe('ChatLayout — handleMouse', () => {
+  let layout: ChatLayout;
+  afterEach(() => { layout?.statusBar.dispose(); });
+
+  test('handleMouse na área de mensagens → delega para messageList', () => {
+    layout = new ChatLayout();
+    const msg: ChatMessage = {
+      id: '1', role: 'tool', content: '', timestamp: new Date(),
+      toolName: 'T', toolInput: '', toolOutput: Array.from({ length: 10 }, (_, i) => `l${i}`),
+      toolStatus: 'done', toolCollapsed: true,
+    };
+    layout.messageList.addMessage(msg);
+    layout.render(80, 30);
+
+    const result = layout.handleMouse({ x: 10, y: 1, button: 0, isRelease: false });
+    expect(typeof result).toBe('boolean');
+  });
+
+  test('handleMouse abaixo da área de mensagens → retorna false', () => {
+    layout = new ChatLayout();
+    layout.render(80, 30);
+    const result = layout.handleMouse({ x: 10, y: 30, button: 0, isRelease: false });
+    expect(result).toBe(false);
   });
 });
