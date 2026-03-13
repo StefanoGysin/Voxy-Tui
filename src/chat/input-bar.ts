@@ -46,6 +46,11 @@ export class InputBar implements Component {
     return this.input.getValue();
   }
 
+  /** Define o valor atual do input programaticamente. */
+  setValue(text: string): void {
+    this.input.setValue(text);
+  }
+
   clear(): void {
     this.input.clear();
   }
