@@ -169,3 +169,38 @@ describe('MessageList — tool messages', () => {
     expect(msgs[1].toolCollapsed).toBe(false);
   });
 });
+
+describe('MessageList — scroll indicator', () => {
+  function makeMany(list: MessageList, n: number): void {
+    for (let i = 0; i < n; i++) {
+      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+  }
+
+  test('sem scroll: primeira linha NÃO é indicador', () => {
+    const list = new MessageList();
+    makeMany(list, 20);
+    const lines = list.render(80, 10);
+    expect(stripAnsi(lines[0])).not.toContain('linhas acima');
+  });
+
+  test('com scroll: primeira linha É o indicador', () => {
+    const list = new MessageList();
+    makeMany(list, 20);
+    list.scrollUp(5);
+    const lines = list.render(80, 10);
+    expect(stripAnsi(lines[0])).toContain('linhas acima');
+  });
+
+  test('getScrollOffset() retorna 0 inicialmente', () => {
+    const list = new MessageList();
+    expect(list.getScrollOffset()).toBe(0);
+  });
+
+  test('getScrollOffset() retorna offset após scrollUp', () => {
+    const list = new MessageList();
+    makeMany(list, 20);
+    list.scrollUp(5);
+    expect(list.getScrollOffset()).toBe(5);
+  });
+});

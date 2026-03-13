@@ -121,6 +121,11 @@ export class MessageList implements Component {
     this.stickyBottom = true;
   }
 
+  /** Retorna o offset de scroll atual (0 = no fundo). Útil para testes. */
+  getScrollOffset(): number {
+    return this.scrollOffset;
+  }
+
   addToolMessage(
     id: string,
     name: string,
@@ -189,6 +194,14 @@ export class MessageList implements Component {
 
     const end = allLines.length - this.scrollOffset;
     const start = end - height;
-    return allLines.slice(start, end);
+    const sliced = allLines.slice(start, end);
+
+    // Indicador de scroll: substitui a primeira linha quando há conteúdo acima
+    if (this.scrollOffset > 0) {
+      const hintText = `↑ ${this.scrollOffset} linhas acima · PgUp/PgDn · roda do mouse`;
+      sliced[0] = `${FG_GRAY}${DIM}${hintText}${RESET}`;
+    }
+
+    return sliced;
   }
 }

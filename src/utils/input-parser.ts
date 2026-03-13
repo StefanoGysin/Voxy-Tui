@@ -57,3 +57,23 @@ export const BRACKETED_PASTE_END     = '\x1b[201~';
 export function isBracketedPasteStart(raw: string): boolean {
   return raw === BRACKETED_PASTE_START;
 }
+
+/**
+ * Detecta eventos de scroll do mouse no formato SGR (mode 1006).
+ * Formato: \x1b[<btn;x;yM (press) ou \x1b[<btn;x;ym (release)
+ * btn=64 → scroll up, btn=65 → scroll down.
+ * Retorna null para qualquer outra sequência.
+ */
+export function parseMouseScroll(seq: string): 'scroll-up' | 'scroll-down' | null {
+  if (!seq.startsWith('\x1b[<')) return null;
+  const inner = seq.slice(3);
+  const lastChar = inner.slice(-1);
+  if (lastChar !== 'M') return null;
+  const parts = inner.slice(0, -1).split(';');
+  if (parts.length < 3) return null;
+  const btn = parseInt(parts[0], 10);
+  if (Number.isNaN(btn)) return null;
+  if (btn === 64) return 'scroll-up';
+  if (btn === 65) return 'scroll-down';
+  return null;
+}

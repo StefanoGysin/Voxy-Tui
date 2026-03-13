@@ -31,6 +31,10 @@ export const ERASE_SCROLLBACK = '\x1b[3J';     // Apaga tela + scrollback
 export const ENTER_ALT_SCREEN = '\x1b[?1049h'; // Entra na tela alternativa (scrollback protegido)
 export const EXIT_ALT_SCREEN  = '\x1b[?1049l'; // Sai da tela alternativa (restaura tela principal)
 
+// Mouse tracking (mode 1000 = button events, 1006 = SGR extended coords)
+export const ENABLE_MOUSE_TRACKING  = '\x1b[?1000h\x1b[?1006h';
+export const DISABLE_MOUSE_TRACKING = '\x1b[?1000l\x1b[?1006l';
+
 // SGR — Estilos
 export const RESET = '\x1b[0m';
 export const BOLD = '\x1b[1m';
