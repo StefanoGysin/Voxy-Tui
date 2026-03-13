@@ -204,3 +204,66 @@ describe('MessageList — scroll indicator', () => {
     expect(list.getScrollOffset()).toBe(5);
   });
 });
+
+describe('MessageList — scrollbar', () => {
+  function makeMany(list: MessageList, n: number): void {
+    for (let i = 0; i < n; i++) {
+      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+  }
+
+  test('sem overflow: sem scrollbar (última coluna não é █ nem ░)', () => {
+    const list = new MessageList();
+    list.addMessage({ id: '1', role: 'user', content: 'curto', timestamp: new Date() });
+    const lines = list.render(20, 10);
+    const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
+    for (const line of contentLines) {
+      const stripped = stripAnsi(line);
+      const last = [...stripped].at(-1) ?? '';
+      expect(last).not.toBe('█');
+      expect(last).not.toBe('░');
+    }
+  });
+
+  test('com overflow: todas as linhas têm scrollbar (█ ou ░) na última coluna', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+    const lines = list.render(40, 10);
+    expect(lines).toHaveLength(10);
+    for (const line of lines) {
+      const stripped = stripAnsi(line);
+      const last = [...stripped].at(-1) ?? '';
+      expect(['█', '░']).toContain(last);
+    }
+  });
+
+  test('com overflow: thumb (█) aparece na parte inferior quando scrollOffset=0', () => {
+    const list = new MessageList(); // scrollOffset=0 = fundo (sticky)
+    makeMany(list, 30);
+    const lines = list.render(40, 10);
+    const scrollChars = lines.map(l => [...stripAnsi(l)].at(-1) ?? '');
+    // Alguma linha inferior deve ser thumb
+    const thumbLines = scrollChars.map((c, i) => ({ c, i })).filter(x => x.c === '█');
+    expect(thumbLines.length).toBeGreaterThan(0);
+    // O thumb deve estar na parte inferior da viewport (último terço)
+    const avgThumbPos = thumbLines.reduce((a, b) => a + b.i, 0) / thumbLines.length;
+    expect(avgThumbPos).toBeGreaterThan(5); // > metade de 10
+  });
+
+  test('com overflow: thumb sobe quando scrollUp()', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+
+    const linesBottom = list.render(40, 10);
+    const thumbBottom = linesBottom.reduce((acc, l, i) =>
+      [...stripAnsi(l)].at(-1) === '█' ? i : acc, -1);
+
+    list.scrollUp(10);
+    const linesUp = list.render(40, 10);
+    const thumbUp = linesUp.reduce((acc, l, i) =>
+      [...stripAnsi(l)].at(-1) === '█' ? i : acc, -1);
+
+    // Após scroll para cima, thumb deve estar mais alto (índice menor)
+    expect(thumbUp).toBeLessThan(thumbBottom);
+  });
+});

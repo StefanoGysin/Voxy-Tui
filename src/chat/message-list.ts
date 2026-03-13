@@ -10,6 +10,10 @@ function formatTime(date: Date): string {
 
 const TOOL_COLLAPSED_OUTPUT_LINES = 3;
 
+// Scrollbar
+const SCROLLBAR_THUMB = '█';
+const SCROLLBAR_TRACK = '░';
+
 function renderToolMessage(msg: ChatMessage, width: number): string[] {
   const name = msg.toolName ?? 'Tool';
   const input = msg.toolInput ?? '';
@@ -172,19 +176,50 @@ export class MessageList implements Component {
     this.stickyBottom = true;
   }
 
+  /**
+   * Gera o array de caracteres do scrollbar (1 char por linha da viewport).
+   * thumb = posição atual, track = espaço restante.
+   */
+  private renderScrollbar(height: number, totalLines: number, maxOffset: number): string[] {
+    const thumbSize = Math.max(1, Math.round((height * height) / totalLines));
+    const thumbPos = maxOffset === 0
+      ? height - thumbSize
+      : Math.round(((maxOffset - this.scrollOffset) / maxOffset) * (height - thumbSize));
+
+    const bar: string[] = [];
+    for (let i = 0; i < height; i++) {
+      if (i >= thumbPos && i < thumbPos + thumbSize) {
+        bar.push(`${FG_GRAY}${SCROLLBAR_THUMB}${RESET}`);
+      } else {
+        bar.push(`${FG_GRAY}${DIM}${SCROLLBAR_TRACK}${RESET}`);
+      }
+    }
+    return bar;
+  }
+
   render(width: number, height: number): string[] {
     if (height <= 0) return [];
 
+    const contentWidth = width - 1;
+
+    // Renderizar todas as mensagens com contentWidth
     const allLines: string[] = [];
     for (const msg of this.messages) {
-      allLines.push(...renderMessage(msg, width));
+      allLines.push(...renderMessage(msg, contentWidth));
     }
 
-    if (allLines.length <= height) {
-      // Pad with empty lines at top
+    const isScrollable = allLines.length > height;
+
+    // === Caso: conteúdo cabe na viewport (sem scrollbar) ===
+    if (!isScrollable) {
       const padding = height - allLines.length;
-      return [...Array<string>(padding).fill(''), ...allLines];
+      return [
+        ...Array<string>(padding).fill(''),
+        ...allLines.map(l => padEndAnsi(l, width)),
+      ];
     }
+
+    // === Caso: overflow — mostrar scrollbar ===
 
     // Clamp scrollOffset
     const maxOffset = Math.max(0, allLines.length - height);
@@ -202,6 +237,10 @@ export class MessageList implements Component {
       sliced[0] = `${FG_GRAY}${DIM}${hintText}${RESET}`;
     }
 
-    return sliced;
+    // Gerar scrollbar
+    const scrollbar = this.renderScrollbar(height, allLines.length, maxOffset);
+
+    // Combinar: conteúdo (padded ao contentWidth) + 1 char de scrollbar
+    return sliced.map((line, i) => padEndAnsi(line, contentWidth) + scrollbar[i]);
   }
 }
