@@ -27,6 +27,10 @@ export const ERASE_DOWN = '\x1b[0J';           // Apaga do cursor ao fim da tela
 export const ERASE_SCREEN = '\x1b[2J';         // Apaga tela inteira
 export const ERASE_SCROLLBACK = '\x1b[3J';     // Apaga tela + scrollback
 
+// Alternate Screen Buffer (xterm/VT220)
+export const ENTER_ALT_SCREEN = '\x1b[?1049h'; // Entra na tela alternativa (scrollback protegido)
+export const EXIT_ALT_SCREEN  = '\x1b[?1049l'; // Sai da tela alternativa (restaura tela principal)
+
 // SGR — Estilos
 export const RESET = '\x1b[0m';
 export const BOLD = '\x1b[1m';

@@ -40,6 +40,22 @@ describe('TUI', () => {
     expect(() => tui.scheduleRender()).not.toThrow();
   });
 
+  it('start() escreve ENTER_ALT_SCREEN no terminal', () => {
+    const term = new MockTerminal();
+    tui = new TUI({ terminal: term });
+    tui.start();
+    expect(term.getOutput()).toContain('\x1b[?1049h');
+  });
+
+  it('stop() escreve EXIT_ALT_SCREEN no terminal', () => {
+    const term = new MockTerminal();
+    tui = new TUI({ terminal: term });
+    tui.start();
+    term.reset();
+    tui.stop();
+    expect(term.getOutput()).toContain('\x1b[?1049l');
+  });
+
   it('adicionar mensagem e re-render produz output diferente', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });

@@ -18,6 +18,7 @@ export class InputBar implements Component {
   private history: string[] = [];
   private historyIndex = -1;
   private savedDraft = '';
+  private programmaticChange = false;
 
   onSubmit?: (text: string) => void;
   onChange?: (text: string) => void;
@@ -39,7 +40,9 @@ export class InputBar implements Component {
       this.savedDraft = '';
       this.onSubmit?.(text);
     };
-    this.input.onChange = (text) => this.onChange?.(text);
+    this.input.onChange = (text) => {
+      if (!this.programmaticChange) this.onChange?.(text);
+    };
   }
 
   getValue(): string {
@@ -126,10 +129,14 @@ export class InputBar implements Component {
     if (key === 'down' && this.historyIndex !== -1) {
       if (this.historyIndex < this.history.length - 1) {
         this.historyIndex++;
+        this.programmaticChange = true;
         this.input.setValue(this.history[this.historyIndex]);
+        this.programmaticChange = false;
       } else {
         this.historyIndex = -1;
+        this.programmaticChange = true;
         this.input.setValue(this.savedDraft);
+        this.programmaticChange = false;
       }
       return true;
     }
@@ -146,7 +153,9 @@ export class InputBar implements Component {
       } else if (this.historyIndex > 0) {
         this.historyIndex--;
       }
+      this.programmaticChange = true;
       this.input.setValue(this.history[this.historyIndex]);
+      this.programmaticChange = false;
       return true;
     }
 

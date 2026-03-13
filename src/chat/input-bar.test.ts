@@ -165,6 +165,44 @@ describe('InputBar — histórico', () => {
   });
 });
 
+describe('InputBar — histórico onChange', () => {
+  test('navegação ↑ não dispara onChange', () => {
+    const bar = new InputBar();
+    bar.onFocus();
+    bar.handleKey({ key: 'h', ctrl: false, meta: false, shift: false, raw: 'h' });
+    bar.handleKey({ key: 'enter', ctrl: false, meta: false, shift: false, raw: '\r' });
+
+    let changeCount = 0;
+    bar.onChange = () => { changeCount++; };
+
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '\x1b[A' });
+    expect(changeCount).toBe(0);
+  });
+
+  test('navegação ↓ não dispara onChange', () => {
+    const bar = new InputBar();
+    bar.onFocus();
+    bar.handleKey({ key: 'h', ctrl: false, meta: false, shift: false, raw: 'h' });
+    bar.handleKey({ key: 'enter', ctrl: false, meta: false, shift: false, raw: '\r' });
+
+    let changeCount = 0;
+    bar.onChange = () => { changeCount++; };
+
+    bar.handleKey({ key: 'up', ctrl: false, meta: false, shift: false, raw: '\x1b[A' });
+    bar.handleKey({ key: 'down', ctrl: false, meta: false, shift: false, raw: '\x1b[B' });
+    expect(changeCount).toBe(0);
+  });
+
+  test('digitação normal ainda dispara onChange', () => {
+    const bar = new InputBar();
+    bar.onFocus();
+    let changeCount = 0;
+    bar.onChange = () => { changeCount++; };
+    bar.handleKey({ key: 'a', ctrl: false, meta: false, shift: false, raw: 'a' });
+    expect(changeCount).toBeGreaterThan(0);
+  });
+});
+
 describe('InputBar — completions', () => {
   const COMPLETIONS: DropdownOption[] = [
     { label: '/help', value: 'help', description: 'Ajuda' },
