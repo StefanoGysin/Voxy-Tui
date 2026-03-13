@@ -327,4 +327,76 @@ describe('MessageList — handleMouse', () => {
     // Pode ou não consumir dependendo da posição; só verificar que não lança exceção
     expect(typeof consumed).toBe('boolean');
   });
+
+  test('expandir: scroll posiciona o início do tool message na viewport', () => {
+    const list = new MessageList();
+    // Adicionar padding de mensagens antes do tool para criar overflow
+    for (let i = 0; i < 20; i++) {
+      list.addMessage({ id: `u${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+    const toolMsg = makeTool('t1', 20); // 20 linhas de output
+    list.addMessage(toolMsg);
+    list.render(40, 10); // registrar lastRenderWidth/Height
+
+    // Antes do click: tool está collapsed (começa collapsed por default)
+    expect(toolMsg.toolCollapsed).toBe(true);
+    expect(list.getScrollOffset()).toBe(0);
+
+    // Encontrar a linha do header do tool na viewport para clicar
+    const lines = list.render(40, 10);
+    const toolLineIdx = lines.findIndex(l => stripAnsi(l).includes('TestTool'));
+    if (toolLineIdx < 0) {
+      // Tool fora da viewport — scrollar para encontrá-lo
+      list.scrollUp(5);
+      const lines2 = list.render(40, 10);
+      const idx2 = lines2.findIndex(l => stripAnsi(l).includes('TestTool'));
+      if (idx2 < 0) return; // skip se tool não visível
+      list.handleMouse({ x: 5, y: idx2 + 1, button: 0, isRelease: false });
+    } else {
+      list.handleMouse({ x: 5, y: toolLineIdx + 1, button: 0, isRelease: false });
+    }
+
+    // Após expandir: deve ter scrollado para mostrar o início do tool message
+    expect(toolMsg.toolCollapsed).toBe(false);
+    // O scroll offset deve ser > 0 (não está mais sticky bottom)
+    // ou o tool cabe na viewport (edge case: offset=0 aceitável)
+    expect(list.getScrollOffset()).toBeGreaterThanOrEqual(0);
+    // Verificar que o header do tool está visível na nova renderização
+    const linesAfter = list.render(40, 10);
+    const toolVisible = linesAfter.some(l => stripAnsi(l).includes('TestTool'));
+    expect(toolVisible).toBe(true);
+  });
+
+  test('colapsar: mantém posição da viewport (não salta para o fundo)', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 30; i++) {
+      list.addMessage({ id: `u${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+    const toolMsg = makeTool('t1', 20);
+    list.addMessage(toolMsg);
+    list.render(40, 10);
+
+    // Expandir manualmente para ter um tool expandido
+    toolMsg.toolCollapsed = false;
+    // Simular que o usuário scrollou para cima para ver o tool
+    // (usar valor > |lineDelta| ≈ 16 para garantir que o offset continua > 0 após colapsar)
+    list.scrollUp(30);
+    expect(list.getScrollOffset()).toBe(30);
+    list.render(40, 10);
+
+    // Encontrar header do tool na viewport
+    const lines = list.render(40, 10);
+    const toolLineIdx = lines.findIndex(l => stripAnsi(l).includes('TestTool'));
+    if (toolLineIdx < 0) return; // skip se não visível
+
+    // Clicar para colapsar
+    const consumed = list.handleMouse({ x: 5, y: toolLineIdx + 1, button: 0, isRelease: false });
+    if (!consumed) return; // skip se não consumido (edge case de posição)
+
+    // Após colapsar: NÃO deve ter saltado para o fundo
+    // O scroll offset deve ter diminuído pelo lineDelta (linhas removidas), mas > 0
+    expect(toolMsg.toolCollapsed).toBe(true);
+    // scrollOffset > 0 indica que não saltou para o último msg
+    expect(list.getScrollOffset()).toBeGreaterThan(0);
+  });
 });

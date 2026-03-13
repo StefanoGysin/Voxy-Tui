@@ -175,6 +175,10 @@ export class MessageList implements Component {
   /**
    * Trata um clique de mouse na área do MessageList.
    * Clique esquerdo (press) numa linha de tool message truncada → toggle collapsed.
+   *
+   * Após EXPANDIR: scroll para mostrar o início do tool message.
+   * Após COLAPSAR: manter posição da viewport (ajustada pelo delta de linhas removidas).
+   *
    * Retorna true se o evento foi consumido.
    */
   handleMouse(event: MouseClickEvent): boolean {
@@ -185,10 +189,13 @@ export class MessageList implements Component {
     const height = this.lastRenderHeight;
     if (height <= 0 || width <= 0) return false;
 
-    // Reconstruir mapeamento linha → mensagem
     const contentWidth = width - 1;
+
+    // Construir mapeamento linha → mensagem e registrar o índice de início de cada msg
     const lineToMsg: (ChatMessage | null)[] = [];
+    const msgStartMap = new Map<ChatMessage, number>();
     for (const msg of this.messages) {
+      msgStartMap.set(msg, lineToMsg.length);
       const msgLines = renderMessage(msg, contentWidth);
       for (let i = 0; i < msgLines.length; i++) {
         lineToMsg.push(msg);
@@ -196,9 +203,9 @@ export class MessageList implements Component {
     }
 
     const total = lineToMsg.length;
+
     // Converter event.y (1-based) para índice 0-based em allLines
     let allLineIdx: number;
-
     if (total <= height) {
       // Sem overflow: padding no topo
       const padding = height - total;
@@ -217,7 +224,35 @@ export class MessageList implements Component {
     if (!msg || msg.role !== 'tool') return false;
     if ((msg.toolOutput?.length ?? 0) <= TOOL_COLLAPSED_OUTPUT_LINES) return false;
 
+    // Registrar estado antes do toggle e calcular lineDelta
+    const wasCollapsed = msg.toolCollapsed !== false;
+    const oldLen = renderMessage(msg, contentWidth).length;
+
+    // Toggle
     msg.toolCollapsed = !msg.toolCollapsed;
+
+    const newLen = renderMessage(msg, contentWidth).length;
+    const lineDelta = newLen - oldLen;
+    const totalAfter = total + lineDelta;
+    const msgStart = msgStartMap.get(msg) ?? 0;
+
+    if (wasCollapsed) {
+      // EXPANDINDO — scroll para mostrar o início do tool message
+      // +1 compensa a linha de indicador de scroll ("↑ N linhas acima")
+      // que substitui sliced[0] quando scrollOffset > 0
+      let idealOffset = Math.max(0, totalAfter - msgStart - height);
+      if (idealOffset > 0) idealOffset += 1;
+      this.scrollOffset = Math.min(idealOffset, Math.max(0, totalAfter - height));
+      this.stickyBottom = this.scrollOffset === 0;
+    } else {
+      // COLAPSANDO — manter posição da viewport, ajustando pelo delta de linhas removidas.
+      // lineDelta < 0 quando colapsa; subtraímos essas linhas do offset para que
+      // o conteúdo acima da viewport não "salte" para cima.
+      const newScrollOffset = Math.max(0, this.scrollOffset + lineDelta);
+      this.scrollOffset = newScrollOffset;
+      this.stickyBottom = newScrollOffset === 0;
+    }
+
     return true;
   }
 
