@@ -1,5 +1,6 @@
-import { describe, test, expect, afterEach } from 'bun:test';
+import { describe, test, expect, afterEach, beforeEach, jest } from 'bun:test';
 import { ChatLayout } from './chat-layout';
+import { ToolActivityLog } from './tool-activity-log';
 import { stripAnsi } from '../utils/strip-ansi';
 
 describe('ChatLayout', () => {
@@ -46,5 +47,74 @@ describe('ChatLayout', () => {
   test('minHeight é razoável (> 4)', () => {
     layout = new ChatLayout();
     expect(layout.minHeight()).toBeGreaterThan(4);
+  });
+});
+
+describe('ChatLayout — activityLog', () => {
+  let layout: ChatLayout;
+  let toolLog: ToolActivityLog;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    layout = new ChatLayout();
+    toolLog = new ToolActivityLog();
+  });
+
+  afterEach(() => {
+    layout.statusBar.dispose();
+    toolLog.dispose();
+    jest.useRealTimers();
+  });
+
+  test('render retorna exatamente height linhas com activityLog vazio', () => {
+    layout.setActivityLog(toolLog);
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('render retorna exatamente height linhas com activityLog com 3 entries', () => {
+    layout.setActivityLog(toolLog);
+    toolLog.addTool('1', 'bash');
+    toolLog.addTool('2', 'read_file');
+    toolLog.addTool('3', 'edit');
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('linhas do activityLog aparecem entre messageList e inputBar', () => {
+    layout.setActivityLog(toolLog);
+    toolLog.addTool('1', 'bash', 'bun test');
+    toolLog.updateTool('1', 'done');
+    const lines = layout.render(80, 20).map((l: string) => stripAnsi(l));
+    // inputBar tem separador '─' — find last index manually
+    let separatorIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].includes('─')) { separatorIdx = i; break; }
+    }
+    // statusBar é a última linha
+    const statusIdx = lines.length - 1;
+    // activityLog deve estar antes do separador do inputBar
+    const activityIdx = lines.findIndex(l => l.includes('bash'));
+    expect(activityIdx).toBeGreaterThanOrEqual(0);
+    expect(activityIdx).toBeLessThan(separatorIdx);
+    expect(activityIdx).toBeLessThan(statusIdx);
+  });
+
+  test('setActivityLog(null) remove o log e render volta ao normal', () => {
+    layout.setActivityLog(toolLog);
+    toolLog.addTool('1', 'bash');
+    layout.setActivityLog(null);
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+    const hasActivity = lines.some(l => l.includes('bash'));
+    expect(hasActivity).toBe(false);
+  });
+
+  test('minHeight cresce com activityLog ativo', () => {
+    const baseHeight = layout.minHeight();
+    layout.setActivityLog(toolLog);
+    toolLog.addTool('1', 'bash');
+    toolLog.addTool('2', 'read_file');
+    expect(layout.minHeight()).toBe(baseHeight + 2);
   });
 });
