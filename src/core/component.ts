@@ -11,12 +11,26 @@ export interface KeyEvent {
   raw: string;
 }
 
+export interface MouseClickEvent {
+  /** Coluna do clique (1-based, coordenada do terminal). */
+  x: number;
+  /** Linha do clique (1-based, coordenada do terminal). */
+  y: number;
+  /** Botão: 0=esquerdo, 1=meio, 2=direito. */
+  button: number;
+  /** true para release, false para press. */
+  isRelease: boolean;
+}
+
 export interface Component {
   /** Render the component to an array of strings (one per line). */
   render(width: number, height: number): string[];
 
   /** Handle a key event. Return true if the event was consumed. */
   handleKey?(event: KeyEvent): boolean;
+
+  /** Handle a mouse click event. Return true if the event was consumed. */
+  handleMouse?(event: MouseClickEvent): boolean;
 
   /** Called when the component gains focus. */
   onFocus?(): void;

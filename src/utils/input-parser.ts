@@ -1,4 +1,4 @@
-import type { KeyEvent } from '../core/component';
+import type { KeyEvent, MouseClickEvent } from '../core/component';
 
 /**
  * Formato do objeto key emitido pelo Node.js readline.emitKeypressEvents().
@@ -76,4 +76,35 @@ export function parseMouseScroll(seq: string): 'scroll-up' | 'scroll-down' | nul
   if (btn === 64) return 'scroll-up';
   if (btn === 65) return 'scroll-down';
   return null;
+}
+
+/**
+ * Tenta interpretar uma sequência SGR como evento de clique de mouse.
+ * Formato: \x1b[<btn;x;yM (press) ou \x1b[<btn;x;ym (release)
+ *
+ * btn=0 → esquerdo, btn=1 → meio, btn=2 → direito.
+ * Bit 2=shift, bit 3=meta, bit 4=ctrl (ignorados por ora).
+ * btn>=32 → movimento/scroll → retorna null.
+ *
+ * Retorna null para qualquer sequência não reconhecida.
+ */
+export function parseMouseClick(seq: string): MouseClickEvent | null {
+  if (!seq.startsWith('\x1b[<')) return null;
+  const inner = seq.slice(3);
+  const lastChar = inner.slice(-1);
+  if (lastChar !== 'M' && lastChar !== 'm') return null;
+  const parts = inner.slice(0, -1).split(';');
+  if (parts.length < 3) return null;
+  const btn = parseInt(parts[0], 10);
+  const x   = parseInt(parts[1], 10);
+  const y   = parseInt(parts[2], 10);
+  if (Number.isNaN(btn) || Number.isNaN(x) || Number.isNaN(y)) return null;
+  // Excluir scroll (btn >= 64) e movimento (btn & 32 !== 0)
+  if (btn >= 64 || (btn & 32) !== 0) return null;
+  return {
+    x,
+    y,
+    button: btn & 3,
+    isRelease: lastChar === 'm',
+  };
 }

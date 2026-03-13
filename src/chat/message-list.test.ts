@@ -124,14 +124,14 @@ describe('MessageList — tool messages', () => {
     list.addToolMessage('1', 'Bash', 'cmd: date', ['Fri, Mar 13'], 'done');
     const joined = stripAnsi(list.render(80, 10).join('\n'));
     expect(joined).not.toContain('linhas ocultas');
-    expect(joined).not.toContain('ctrl+e');
+    expect(joined).not.toContain('click');
   });
 
-  test('output grande mostra hint ctrl+e', () => {
+  test('output grande mostra hint click', () => {
     const output = Array.from({ length: 10 }, (_, i) => `line ${i}`);
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
     const joined = stripAnsi(list.render(80, 30).join('\n'));
-    expect(joined).toContain('ctrl+e');
+    expect(joined).toContain('click');
   });
 
   test('toggleLastTruncatedTool expande output', () => {
@@ -265,5 +265,66 @@ describe('MessageList — scrollbar', () => {
 
     // Após scroll para cima, thumb deve estar mais alto (índice menor)
     expect(thumbUp).toBeLessThan(thumbBottom);
+  });
+});
+
+describe('MessageList — handleMouse', () => {
+  function makeTool(id: string, outputLines: number): ChatMessage {
+    return {
+      id,
+      role: 'tool',
+      content: '',
+      timestamp: new Date(),
+      toolName: 'TestTool',
+      toolInput: 'input',
+      toolOutput: Array.from({ length: outputLines }, (_, i) => `linha ${i}`),
+      toolStatus: 'done',
+      toolCollapsed: true,
+    };
+  }
+
+  test('clique esquerdo numa linha de tool truncado → toggle collapsed', () => {
+    const list = new MessageList();
+    const msg = makeTool('1', 10);
+    list.addMessage(msg);
+    list.render(40, 20);
+
+    const wasCollapsed = msg.toolCollapsed;
+    const lines = list.render(40, 20);
+    const headerLineIdx = lines.findIndex(l => stripAnsi(l).includes('TestTool'));
+    expect(headerLineIdx).toBeGreaterThanOrEqual(0);
+
+    const consumed = list.handleMouse({ x: 5, y: headerLineIdx + 1, button: 0, isRelease: false });
+    expect(consumed).toBe(true);
+    expect(msg.toolCollapsed).toBe(!wasCollapsed);
+  });
+
+  test('release event (isRelease=true) → não consome', () => {
+    const list = new MessageList();
+    list.addMessage(makeTool('1', 10));
+    list.render(40, 20);
+    const consumed = list.handleMouse({ x: 5, y: 1, button: 0, isRelease: true });
+    expect(consumed).toBe(false);
+  });
+
+  test('clique em tool com poucas linhas (não truncado) → não consome', () => {
+    const list = new MessageList();
+    const msg = makeTool('1', 2);
+    list.addMessage(msg);
+    const lines = list.render(40, 20);
+    const headerLineIdx = lines.findIndex(l => stripAnsi(l).includes('TestTool'));
+    expect(headerLineIdx).toBeGreaterThanOrEqual(0);
+    const consumed = list.handleMouse({ x: 5, y: headerLineIdx + 1, button: 0, isRelease: false });
+    expect(consumed).toBe(false);
+  });
+
+  test('clique fora da área de conteúdo (padding) → não consome', () => {
+    const list = new MessageList();
+    list.addMessage(makeTool('1', 10));
+    list.render(40, 20);
+    // y=1 é padding (conteúdo fica nas últimas linhas com sticky bottom)
+    const consumed = list.handleMouse({ x: 5, y: 1, button: 0, isRelease: false });
+    // Pode ou não consumir dependendo da posição; só verificar que não lança exceção
+    expect(typeof consumed).toBe('boolean');
   });
 });

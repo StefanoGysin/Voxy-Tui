@@ -1,4 +1,4 @@
-import type { Component } from '../core/component';
+import type { Component, MouseClickEvent } from '../core/component';
 import type { ChatMessage } from './types';
 import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED } from '../core/ansi';
 import { wrapText } from '../utils/wrap';
@@ -26,10 +26,10 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
     ? `${FG_GREEN}✓${RESET}`
     : `${FG_RED}✗${RESET}`;
 
-  const HINT_EXPAND = `${FG_GRAY}${DIM}ctrl+e expandir${RESET}`;
-  const HINT_COLLPS = `${FG_GRAY}${DIM}ctrl+e recolher${RESET}`;
+  const HINT_EXPAND = `${FG_GRAY}${DIM}click expandir${RESET}`;
+  const HINT_COLLPS = `${FG_GRAY}${DIM}click recolher${RESET}`;
   const hintText = isTruncated
-    ? (collapsed ? 'ctrl+e expandir' : 'ctrl+e recolher')
+    ? (collapsed ? 'click expandir' : 'click recolher')
     : '';
   const hintAnsi = isTruncated
     ? (collapsed ? HINT_EXPAND : HINT_COLLPS)
@@ -92,6 +92,8 @@ export class MessageList implements Component {
   private messages: ChatMessage[] = [];
   private scrollOffset = 0;
   private stickyBottom = true;
+  private lastRenderWidth = 0;
+  private lastRenderHeight = 0;
 
   addMessage(message: ChatMessage): void {
     this.messages.push(message);
@@ -170,6 +172,55 @@ export class MessageList implements Component {
     return false;
   }
 
+  /**
+   * Trata um clique de mouse na área do MessageList.
+   * Clique esquerdo (press) numa linha de tool message truncada → toggle collapsed.
+   * Retorna true se o evento foi consumido.
+   */
+  handleMouse(event: MouseClickEvent): boolean {
+    // Apenas press do botão esquerdo
+    if (event.isRelease || event.button !== 0) return false;
+
+    const width = this.lastRenderWidth;
+    const height = this.lastRenderHeight;
+    if (height <= 0 || width <= 0) return false;
+
+    // Reconstruir mapeamento linha → mensagem
+    const contentWidth = width - 1;
+    const lineToMsg: (ChatMessage | null)[] = [];
+    for (const msg of this.messages) {
+      const msgLines = renderMessage(msg, contentWidth);
+      for (let i = 0; i < msgLines.length; i++) {
+        lineToMsg.push(msg);
+      }
+    }
+
+    const total = lineToMsg.length;
+    // Converter event.y (1-based) para índice 0-based em allLines
+    let allLineIdx: number;
+
+    if (total <= height) {
+      // Sem overflow: padding no topo
+      const padding = height - total;
+      allLineIdx = (event.y - 1) - padding;
+    } else {
+      // Com overflow: janela deslizante
+      const maxOffset = total - height;
+      const clampedOffset = Math.min(this.scrollOffset, maxOffset);
+      const end = total - clampedOffset;
+      const start = end - height;
+      allLineIdx = start + (event.y - 1);
+    }
+
+    if (allLineIdx < 0 || allLineIdx >= total) return false;
+    const msg = lineToMsg[allLineIdx];
+    if (!msg || msg.role !== 'tool') return false;
+    if ((msg.toolOutput?.length ?? 0) <= TOOL_COLLAPSED_OUTPUT_LINES) return false;
+
+    msg.toolCollapsed = !msg.toolCollapsed;
+    return true;
+  }
+
   clear(): void {
     this.messages = [];
     this.scrollOffset = 0;
@@ -199,6 +250,9 @@ export class MessageList implements Component {
 
   render(width: number, height: number): string[] {
     if (height <= 0) return [];
+
+    this.lastRenderWidth = width;
+    this.lastRenderHeight = height;
 
     const contentWidth = width - 1;
 

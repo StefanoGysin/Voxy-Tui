@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseKey, parseMouseScroll } from './input-parser';
+import { parseKey, parseMouseScroll, parseMouseClick } from './input-parser';
 
 describe('parseKey', () => {
   test('converte tecla simples', () => {
@@ -55,5 +55,35 @@ describe('parseMouseScroll', () => {
 
   test('sequência incompleta → null', () => {
     expect(parseMouseScroll('\x1b[<')).toBeNull();
+  });
+});
+
+describe('parseMouseClick', () => {
+  test('parse botão esquerdo press', () => {
+    const ev = parseMouseClick('\x1b[<0;10;5M');
+    expect(ev).not.toBeNull();
+    expect(ev!.button).toBe(0);
+    expect(ev!.x).toBe(10);
+    expect(ev!.y).toBe(5);
+    expect(ev!.isRelease).toBe(false);
+  });
+
+  test('parse release (m minúsculo)', () => {
+    const ev = parseMouseClick('\x1b[<0;10;5m');
+    expect(ev).not.toBeNull();
+    expect(ev!.isRelease).toBe(true);
+  });
+
+  test('retorna null para scroll (btn=64)', () => {
+    expect(parseMouseClick('\x1b[<64;10;5M')).toBeNull();
+  });
+
+  test('retorna null para sequência não-SGR', () => {
+    expect(parseMouseClick('hello')).toBeNull();
+    expect(parseMouseClick('\x1b[A')).toBeNull();
+  });
+
+  test('retorna null para movimento (btn=32)', () => {
+    expect(parseMouseClick('\x1b[<32;10;5M')).toBeNull();
   });
 });
