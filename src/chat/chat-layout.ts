@@ -2,11 +2,13 @@ import type { Component, KeyEvent } from '../core/component';
 import { MessageList } from './message-list';
 import { InputBar } from './input-bar';
 import { StatusBar } from './status-bar';
+import type { ToolActivityLog } from './tool-activity-log';
 
 export class ChatLayout implements Component {
   readonly messageList: MessageList;
   readonly inputBar: InputBar;
   readonly statusBar: StatusBar;
+  private activityLog: ToolActivityLog | null = null;
 
   constructor() {
     this.messageList = new MessageList();
@@ -14,16 +16,28 @@ export class ChatLayout implements Component {
     this.statusBar = new StatusBar();
   }
 
+  /**
+   * Define o ToolActivityLog a ser renderizado entre messageList e inputBar.
+   * Passe null para ocultar.
+   */
+  setActivityLog(log: ToolActivityLog | null): void {
+    this.activityLog = log;
+  }
+
   render(width: number, height: number): string[] {
     const statusHeight = 1;
     const inputHeight = Math.max(this.inputBar.minHeight(), 2);
-    const messagesHeight = Math.max(0, height - statusHeight - inputHeight);
+    const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
+    const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight);
 
     const messageLines = this.messageList.render(width, messagesHeight);
+    const activityLines = activityHeight > 0
+      ? this.activityLog!.render(width, activityHeight)
+      : [];
     const inputLines = this.inputBar.render(width, inputHeight);
     const statusLines = this.statusBar.render(width, statusHeight);
 
-    return [...messageLines, ...inputLines, ...statusLines];
+    return [...messageLines, ...activityLines, ...inputLines, ...statusLines];
   }
 
   handleKey(event: KeyEvent): boolean {
@@ -31,6 +45,7 @@ export class ChatLayout implements Component {
   }
 
   minHeight(): number {
-    return this.inputBar.minHeight() + this.statusBar.minHeight() + 3;
+    const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
+    return this.inputBar.minHeight() + this.statusBar.minHeight() + 3 + activityHeight;
   }
 }

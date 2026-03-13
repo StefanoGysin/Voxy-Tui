@@ -60,6 +60,15 @@ export class ToolActivityLog implements Component {
 
   dispose(): void { this.stopTimer(); }
 
+  /**
+   * Número de linhas que render() vai retornar sem chamar render().
+   * Usado por ChatLayout para calcular a altura antes de renderizar.
+   * 0 quando não há entradas.
+   */
+  visibleLineCount(): number {
+    return Math.min(this.entries.length, this.maxVisible);
+  }
+
   render(width: number, _height: number): string[] {
     const visible = this.entries.slice(-this.maxVisible);
     return visible.map(entry => this.renderEntry(entry, width));

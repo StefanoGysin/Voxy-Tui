@@ -107,4 +107,37 @@ describe('ToolActivityLog', () => {
     jest.advanceTimersByTime(FRAME_INTERVAL_MS * 5);
     expect(cb).not.toHaveBeenCalled();
   });
+
+  describe('visibleLineCount()', () => {
+    it('retorna 0 sem entradas', () => {
+      expect(log.visibleLineCount()).toBe(0);
+    });
+
+    it('retorna número de entradas quando abaixo do maxVisible', () => {
+      log.addTool('1', 'bash');
+      log.addTool('2', 'read_file');
+      expect(log.visibleLineCount()).toBe(2);
+    });
+
+    it('retorna maxVisible quando entries excede maxVisible', () => {
+      const smallLog = new ToolActivityLog({ maxVisible: 2 });
+      smallLog.addTool('1', 'a');
+      smallLog.addTool('2', 'b');
+      smallLog.addTool('3', 'c');
+      expect(smallLog.visibleLineCount()).toBe(2);
+      smallLog.dispose();
+    });
+
+    it('retorna 0 após clear()', () => {
+      log.addTool('1', 'bash');
+      log.clear();
+      expect(log.visibleLineCount()).toBe(0);
+    });
+
+    it('coincide com render().length', () => {
+      log.addTool('1', 'bash');
+      log.addTool('2', 'read_file');
+      expect(log.visibleLineCount()).toBe(log.render(80, 24).length);
+    });
+  });
 });
