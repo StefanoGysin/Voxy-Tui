@@ -63,6 +63,12 @@ describe('InputBar', () => {
     expect(changes).toContain('x');
   });
 
+  test('setValue define o valor do input', () => {
+    const bar = new InputBar();
+    bar.setValue('hello world');
+    expect(bar.getValue()).toBe('hello world');
+  });
+
   test('handleKey delega ao TextInput', () => {
     bar.onFocus();
     bar.handleKey({ key: 'a', ctrl: false, meta: false, shift: false, raw: 'a' });
