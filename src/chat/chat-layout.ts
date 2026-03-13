@@ -1,4 +1,4 @@
-import type { Component, KeyEvent } from '../core/component';
+import type { Component, KeyEvent, MouseClickEvent } from '../core/component';
 import { MessageList } from './message-list';
 import { InputBar } from './input-bar';
 import { StatusBar } from './status-bar';
@@ -14,6 +14,7 @@ export class ChatLayout implements Component {
   readonly statusBar: StatusBar;
   private activityLog: ToolActivityLog | null = null;
   private lastScrollAt = 0;
+  private lastMessagesHeight = 0;
 
   constructor() {
     this.messageList = new MessageList();
@@ -34,6 +35,7 @@ export class ChatLayout implements Component {
     const inputHeight = Math.max(this.inputBar.minHeight(), 2);
     const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
     const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight);
+    this.lastMessagesHeight = messagesHeight;
 
     const messageLines = this.messageList.render(width, messagesHeight);
     const activityLines = activityHeight > 0
@@ -43,6 +45,17 @@ export class ChatLayout implements Component {
     const statusLines = this.statusBar.render(width, statusHeight);
 
     return [...messageLines, ...activityLines, ...inputLines, ...statusLines];
+  }
+
+  /**
+   * Despacha um clique de mouse para o componente correto com base na posição Y.
+   * MessageList ocupa as linhas 1..lastMessagesHeight do layout.
+   */
+  handleMouse(event: MouseClickEvent): boolean {
+    if (event.y >= 1 && event.y <= this.lastMessagesHeight) {
+      return this.messageList.handleMouse?.(event) ?? false;
+    }
+    return false;
   }
 
   handleKey(event: KeyEvent): boolean {
