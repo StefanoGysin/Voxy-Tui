@@ -77,3 +77,95 @@ describe('MessageList', () => {
     expect(stripAnsi(lines.join('')).trim()).toBe('');
   });
 });
+
+describe('MessageList — tool messages', () => {
+  let list: MessageList;
+  beforeEach(() => { list = new MessageList(); });
+
+  test('addToolMessage adiciona mensagem com role tool', () => {
+    list.addToolMessage('1', 'Bash', 'cmd: date', ['Fri, Mar 13'], 'done');
+    const lines = list.render(80, 10);
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).toContain('Bash');
+    expect(joined).toContain('cmd: date');
+    expect(joined).toContain('Fri, Mar 13');
+  });
+
+  test('render retorna exatamente height linhas com tool message', () => {
+    list.addToolMessage('1', 'Bash', 'cmd: date', ['output'], 'done');
+    expect(list.render(80, 15)).toHaveLength(15);
+  });
+
+  test('tool done mostra ✓', () => {
+    list.addToolMessage('1', 'Read', 'file_path: a.ts', [], 'done');
+    const joined = stripAnsi(list.render(80, 10).join('\n'));
+    expect(joined).toContain('✓');
+  });
+
+  test('tool error mostra ✗', () => {
+    list.addToolMessage('1', 'Bash', 'cmd: x', ['not found'], 'error');
+    const joined = stripAnsi(list.render(80, 10).join('\n'));
+    expect(joined).toContain('✗');
+  });
+
+  test('output grande é colapsado por default (3 linhas visíveis)', () => {
+    const output = ['a', 'b', 'c', 'd', 'e', 'f'];
+    list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
+    const joined = stripAnsi(list.render(80, 20).join('\n'));
+    expect(joined).toContain('a');
+    expect(joined).toContain('b');
+    expect(joined).toContain('c');
+    const dIndex = joined.split('\n').findIndex(l => l.trim() === 'd');
+    expect(dIndex).toBe(-1);
+    expect(joined).toContain('linhas ocultas');
+  });
+
+  test('output pequeno (≤ 3) não mostra hint de truncamento', () => {
+    list.addToolMessage('1', 'Bash', 'cmd: date', ['Fri, Mar 13'], 'done');
+    const joined = stripAnsi(list.render(80, 10).join('\n'));
+    expect(joined).not.toContain('linhas ocultas');
+    expect(joined).not.toContain('ctrl+e');
+  });
+
+  test('output grande mostra hint ctrl+e', () => {
+    const output = Array.from({ length: 10 }, (_, i) => `line ${i}`);
+    list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
+    const joined = stripAnsi(list.render(80, 30).join('\n'));
+    expect(joined).toContain('ctrl+e');
+  });
+
+  test('toggleLastTruncatedTool expande output', () => {
+    const output = ['a', 'b', 'c', 'd', 'e'];
+    list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
+    const toggled = list.toggleLastTruncatedTool();
+    expect(toggled).toBe(true);
+    const joined = stripAnsi(list.render(80, 20).join('\n'));
+    expect(joined).toContain('d');
+    expect(joined).toContain('e');
+    expect(joined).not.toContain('linhas ocultas');
+  });
+
+  test('toggleLastTruncatedTool recolhe após expand', () => {
+    const output = ['a', 'b', 'c', 'd', 'e'];
+    list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
+    list.toggleLastTruncatedTool();
+    list.toggleLastTruncatedTool();
+    const joined = stripAnsi(list.render(80, 20).join('\n'));
+    expect(joined).toContain('linhas ocultas');
+  });
+
+  test('toggleLastTruncatedTool retorna false sem tools truncadas', () => {
+    list.addToolMessage('1', 'Bash', 'cmd: date', ['single line'], 'done');
+    expect(list.toggleLastTruncatedTool()).toBe(false);
+  });
+
+  test('toggleLastTruncatedTool age na tool mais recente', () => {
+    const output = ['a', 'b', 'c', 'd', 'e'];
+    list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
+    list.addToolMessage('2', 'Read', 'file: a.ts', output, 'done');
+    list.toggleLastTruncatedTool();
+    const msgs = (list as any).messages as ChatMessage[];
+    expect(msgs[0].toolCollapsed).toBe(true);
+    expect(msgs[1].toolCollapsed).toBe(false);
+  });
+});
