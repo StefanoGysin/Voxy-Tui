@@ -31,9 +31,19 @@ export const ERASE_SCROLLBACK = '\x1b[3J';     // Apaga tela + scrollback
 export const ENTER_ALT_SCREEN = '\x1b[?1049h'; // Entra na tela alternativa (scrollback protegido)
 export const EXIT_ALT_SCREEN  = '\x1b[?1049l'; // Sai da tela alternativa (restaura tela principal)
 
-// Mouse tracking (mode 1000 = button events, 1006 = SGR extended coords)
-export const ENABLE_MOUSE_TRACKING  = '\x1b[?1000h\x1b[?1006h';
-export const DISABLE_MOUSE_TRACKING = '\x1b[?1000l\x1b[?1006l';
+// Mouse tracking (mode 1002 = button-event tracking with drag, 1006 = SGR extended coords)
+export const ENABLE_MOUSE_TRACKING  = '\x1b[?1002h\x1b[?1006h';
+export const DISABLE_MOUSE_TRACKING = '\x1b[?1002l\x1b[?1006l';
+
+/**
+ * Gera sequência OSC 52 para escrever texto no clipboard do terminal.
+ * Funciona em WezTerm, iTerm2, Kitty, Windows Terminal, GNOME Terminal 3.36+.
+ * No tmux, requer `set-clipboard on` no ~/.tmux.conf.
+ */
+export function clipboardOSC52(text: string): string {
+  const b64 = Buffer.from(text, 'utf-8').toString('base64');
+  return `\x1b]52;c;${b64}\x07`;
+}
 
 // SGR — Estilos
 export const RESET = '\x1b[0m';
