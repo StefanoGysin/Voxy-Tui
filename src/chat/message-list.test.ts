@@ -421,7 +421,7 @@ describe('MessageList — drag selection', () => {
     expect(result).toBe(true);
   });
 
-  test('drag seguido de release → chama onTextCopied, não faz expand/collapse', () => {
+  test('drag seguido de release + right-click → chama onTextCopied', () => {
     const list = new MessageList();
     for (let i = 0; i < 5; i++) {
       list.addMessage({ id: `u${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
@@ -434,10 +434,14 @@ describe('MessageList — drag selection', () => {
     list.handleMouse({ x: 1, y: 8, button: 0, isRelease: false });
     // Drag
     list.handleMouseDrag({ x: 5, y: 7, button: 0 });
-    // Release
+    // Release (highlight persiste, sem copiar)
     const consumed = list.handleMouse({ x: 5, y: 7, button: 0, isRelease: true });
-
     expect(consumed).toBe(true);
+    expect(copied).toBe('');
+
+    // Right-click release → copia e limpa
+    const rcConsumed = list.handleMouse({ x: 5, y: 7, button: 2, isRelease: true });
+    expect(rcConsumed).toBe(true);
     expect(copied.length).toBeGreaterThan(0);
   });
 
@@ -471,7 +475,7 @@ describe('MessageList — drag selection', () => {
 
     // Após release: render deve mostrar highlight nas linhas selecionadas
     const lines = list.render(40, 10);
-    const hasHighlight = lines.some(l => l.includes('\x1b[44;97m'));
+    const hasHighlight = lines.some(l => l.includes('\x1b[7m'));
     expect(hasHighlight).toBe(true);
   });
 
@@ -488,11 +492,11 @@ describe('MessageList — drag selection', () => {
     list.handleMouseDrag({ x: 1, y: 7, button: 0 });
     list.handleMouse({ x: 1, y: 7, button: 0, isRelease: true });
     // Confirmar highlight presente
-    expect(list.render(40, 10).some(l => l.includes('\x1b[44;97m'))).toBe(true);
+    expect(list.render(40, 10).some(l => l.includes('\x1b[7m'))).toBe(true);
 
     // Novo press → highlight deve desaparecer
     list.handleMouse({ x: 1, y: 5, button: 0, isRelease: false });
-    expect(list.render(40, 10).some(l => l.includes('\x1b[44;97m'))).toBe(false);
+    expect(list.render(40, 10).some(l => l.includes('\x1b[7m'))).toBe(false);
   });
 
   test('scroll durante drag estende selCurrentIdx (updateSelOnScroll)', () => {
@@ -510,13 +514,13 @@ describe('MessageList — drag selection', () => {
     // Capturar selCurrentIdx antes do scroll
     // (não temos acesso direto ao campo privado, mas podemos checar via highlight)
     const linesBefore = list.render(40, 10);
-    const highlightedBefore = linesBefore.filter(l => l.includes('\x1b[44;97m')).length;
+    const highlightedBefore = linesBefore.filter(l => l.includes('\x1b[7m')).length;
 
     // Rolar para cima — selCurrentIdx deve se mover para cima em allLines-space
     list.scrollUp(3);
 
     const linesAfter = list.render(40, 10);
-    const highlightedAfter = linesAfter.filter(l => l.includes('\x1b[44;97m')).length;
+    const highlightedAfter = linesAfter.filter(l => l.includes('\x1b[7m')).length;
 
     // Após scroll de 3 linhas enquanto dragging no topo, mais linhas devem estar selecionadas
     expect(highlightedAfter).toBeGreaterThanOrEqual(highlightedBefore);
