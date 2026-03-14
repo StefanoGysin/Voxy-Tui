@@ -212,7 +212,7 @@ describe('MessageList — scrollbar', () => {
     }
   }
 
-  test('sem overflow: sem scrollbar (última coluna não é ▌ nem ╎)', () => {
+  test('sem overflow: sem scrollbar (última coluna não é ▐ nem ╎)', () => {
     const list = new MessageList();
     list.addMessage({ id: '1', role: 'user', content: 'curto', timestamp: new Date() });
     const lines = list.render(20, 10);
@@ -220,12 +220,12 @@ describe('MessageList — scrollbar', () => {
     for (const line of contentLines) {
       const stripped = stripAnsi(line);
       const last = [...stripped].at(-1) ?? '';
-      expect(last).not.toBe('▌');
+      expect(last).not.toBe('▐');
       expect(last).not.toBe('╎');
     }
   });
 
-  test('com overflow: todas as linhas têm scrollbar (▌ ou ╎) na última coluna', () => {
+  test('com overflow: todas as linhas têm scrollbar (▐ ou ╎) na última coluna', () => {
     const list = new MessageList();
     makeMany(list, 30);
     const lines = list.render(40, 10);
@@ -233,17 +233,17 @@ describe('MessageList — scrollbar', () => {
     for (const line of lines) {
       const stripped = stripAnsi(line);
       const last = [...stripped].at(-1) ?? '';
-      expect(['▌', '╎']).toContain(last);
+      expect(['▐', '╎']).toContain(last);
     }
   });
 
-  test('com overflow: thumb (▌) aparece na parte inferior quando scrollOffset=0', () => {
+  test('com overflow: thumb (▐) aparece na parte inferior quando scrollOffset=0', () => {
     const list = new MessageList(); // scrollOffset=0 = fundo (sticky)
     makeMany(list, 30);
     const lines = list.render(40, 10);
     const scrollChars = lines.map(l => [...stripAnsi(l)].at(-1) ?? '');
     // Alguma linha inferior deve ser thumb
-    const thumbLines = scrollChars.map((c, i) => ({ c, i })).filter(x => x.c === '▌');
+    const thumbLines = scrollChars.map((c, i) => ({ c, i })).filter(x => x.c === '▐');
     expect(thumbLines.length).toBeGreaterThan(0);
     // O thumb deve estar na parte inferior da viewport (último terço)
     const avgThumbPos = thumbLines.reduce((a, b) => a + b.i, 0) / thumbLines.length;
@@ -256,12 +256,12 @@ describe('MessageList — scrollbar', () => {
 
     const linesBottom = list.render(40, 10);
     const thumbBottom = linesBottom.reduce((acc, l, i) =>
-      [...stripAnsi(l)].at(-1) === '▌' ? i : acc, -1);
+      [...stripAnsi(l)].at(-1) === '▐' ? i : acc, -1);
 
     list.scrollUp(10);
     const linesUp = list.render(40, 10);
     const thumbUp = linesUp.reduce((acc, l, i) =>
-      [...stripAnsi(l)].at(-1) === '▌' ? i : acc, -1);
+      [...stripAnsi(l)].at(-1) === '▐' ? i : acc, -1);
 
     // Após scroll para cima, thumb deve estar mais alto (índice menor)
     expect(thumbUp).toBeLessThan(thumbBottom);
@@ -679,16 +679,17 @@ describe('MessageList — bugfix: isScrollbarDrag release fora do scrollbar', ()
 });
 
 describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
-  test('render inclui margem: cada linha de conteúdo começa com 2 espaços', () => {
+  test('render inclui margem: cada linha de conteúdo começa com │ + espaço', () => {
     const list = new MessageList();
     list.addMessage({ id: '1', role: 'user', content: 'hello', timestamp: new Date() });
     const lines = list.render(30, 10);
-    // Linhas de conteúdo (não-padding) devem começar com 2 espaços
+    // Linhas de conteúdo (não-padding) devem começar com │ + espaço
     const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
     expect(contentLines.length).toBeGreaterThan(0);
     for (const line of contentLines) {
       const stripped = stripAnsi(line);
-      expect(stripped.startsWith('  ')).toBe(true);
+      expect(stripped[0]).toBe('│');    // borda está presente
+      expect(stripped[1]).toBe(' ');    // espaço após borda
     }
   });
 
@@ -712,6 +713,34 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     // event.x=4 → selAnchorX = 1
     list.handleMouse({ x: 4, y: 9, button: 0, isRelease: false });
     expect((list as any).selAnchorX).toBe(1);
+  });
+
+  test('left border: user tem borda verde (│), assistant tem borda ciano', () => {
+    const list = new MessageList();
+    list.addMessage({ id: '1', role: 'user', content: 'oi', timestamp: new Date() });
+    list.addMessage({ id: '2', role: 'assistant', content: 'olá', timestamp: new Date() });
+    const lines = list.render(40, 10);
+    const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
+    // Toda linha de conteúdo deve ter │ como primeiro char após stripAnsi
+    expect(contentLines.every(l => stripAnsi(l)[0] === '│')).toBe(true);
+    // Deve haver linhas com FG_GREEN│ (user) e FG_CYAN│ (assistant)
+    const joined = lines.join('\n');
+    expect(joined).toContain('\x1b[32m│');   // FG_GREEN│ (user)
+    expect(joined).toContain('\x1b[36m│');   // FG_CYAN│ (assistant)
+  });
+
+  test('left border: hint de scroll não tem borda │', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 30; i++) {
+      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+    list.render(40, 10);  // inicializa estado
+    list.scrollUp(5);
+    const lines = list.render(40, 10);
+    // Primeira linha deve ser hint (↑) sem borda │
+    const hintLine = stripAnsi(lines[0]);
+    expect(hintLine).toContain('↑');
+    expect(hintLine[0]).toBe(' ');  // espaço, não │
   });
 
   test('separador ─ entre mensagens', () => {

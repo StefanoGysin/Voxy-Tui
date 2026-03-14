@@ -1,6 +1,6 @@
 import type { Component, MouseClickEvent, MouseDragEvent } from '../core/component';
 import type { ChatMessage } from './types';
-import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED } from '../core/ansi';
+import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED, FG_YELLOW } from '../core/ansi';
 import { wrapText } from '../utils/wrap';
 import { padEndAnsi, byteIndexAtVisualCol } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
@@ -16,10 +16,21 @@ const TOOL_COLLAPSED_OUTPUT_LINES = 3;
 const SEL_HL  = '\x1b[44m';  // blue background (standard, todos os terminais)
 const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/etc.)
 
-const SCROLLBAR_THUMB = '▌';   // U+258C LEFT HALF BLOCK — thumb visível mas fino
+const SCROLLBAR_THUMB = '▐';   // U+2590 RIGHT HALF BLOCK — preenche lado direito da célula
 const SCROLLBAR_TRACK = '╎';   // U+254E LIGHT DOUBLE DASH VERTICAL — track muito sutil
 const MARGIN_LEFT = 2;  // espaço de respiração à esquerda do conteúdo
 const SCROLLBAR_PAGE_LINES = 10;  // linhas por click no track do scrollbar
+
+/** Retorna o caractere ANSI colorido de borda esquerda para a role dada. */
+function getMsgBorderAnsi(role: ChatMessage['role']): string {
+  switch (role) {
+    case 'user':      return `${FG_GREEN}│${RESET}`;
+    case 'assistant': return `${FG_CYAN}│${RESET}`;
+    case 'system':    return `${FG_GRAY}│${RESET}`;
+    case 'tool':      return `${FG_YELLOW}│${RESET}`;
+    default:          return `${FG_GRAY}│${RESET}`;
+  }
+}
 
 function renderToolMessage(msg: ChatMessage, width: number): string[] {
   const name = msg.toolName ?? 'Tool';
@@ -585,8 +596,14 @@ export class MessageList implements Component {
 
     // Renderizar todas as mensagens com textWidth
     const allLines: string[] = [];
+    const allLineBorders: string[] = [];
     for (const msg of this.messages) {
-      allLines.push(...renderMessage(msg, textWidth));
+      const msgLines = renderMessage(msg, textWidth);
+      const borderChar = getMsgBorderAnsi(msg.role);
+      for (const line of msgLines) {
+        allLines.push(line);
+        allLineBorders.push(borderChar);
+      }
     }
     // Cachear count para uso em updateSelOnScroll() (scroll durante drag)
     this.lastAllLinesCount = allLines.length;
@@ -617,12 +634,12 @@ export class MessageList implements Component {
     // === Caso: conteúdo cabe na viewport (sem scrollbar) ===
     if (!isScrollable) {
       const padding = height - allLines.length;
-      const marginStr = ' '.repeat(MARGIN_LEFT)
       return [
         ...Array<string>(padding).fill(''),
         ...allLines.map((l, i) => {
           const hl = this.applySelHL(l, i, selFromIdx, selFromX, selToIdx, selToX)
-          return padEndAnsi(marginStr + hl, width)
+          const border = allLineBorders[i] ?? ' '
+          return padEndAnsi(border + ' ' + hl, width)
         }),
       ];
     }
@@ -648,14 +665,13 @@ export class MessageList implements Component {
     // Gerar scrollbar
     const scrollbar = this.renderScrollbar(height, allLines.length, maxOffset);
 
-    // Combinar: margem + conteúdo (padded ao textWidth) + gap + scrollbar
-    const marginStr = ' '.repeat(MARGIN_LEFT)
+    // Combinar: borda + espaço + conteúdo (padded ao textWidth) + gap + scrollbar
     return sliced.map((line, i) => {
       const allLineIdx = start + i;
-      // Não aplicar highlight à linha de hint (scrollOffset > 0, i === 0 substitui conteúdo)
       const isHint = this.scrollOffset > 0 && i === 0;
       const hl = isHint ? line : this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX)
-      return marginStr + padEndAnsi(hl, textWidth) + ' ' + scrollbar[i];
+      const border = isHint ? ' ' : (allLineBorders[allLineIdx] ?? ' ')
+      return border + ' ' + padEndAnsi(hl, textWidth) + ' ' + scrollbar[i];
     });
   }
 }
