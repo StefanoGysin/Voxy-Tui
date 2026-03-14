@@ -475,7 +475,7 @@ describe('MessageList — drag selection', () => {
 
     // Após release: render deve mostrar highlight nas linhas selecionadas
     const lines = list.render(40, 10);
-    const hasHighlight = lines.some(l => l.includes('\x1b[7m'));
+    const hasHighlight = lines.some(l => l.includes('\x1b[44m'));
     expect(hasHighlight).toBe(true);
   });
 
@@ -492,11 +492,11 @@ describe('MessageList — drag selection', () => {
     list.handleMouseDrag({ x: 1, y: 7, button: 0 });
     list.handleMouse({ x: 1, y: 7, button: 0, isRelease: true });
     // Confirmar highlight presente
-    expect(list.render(40, 10).some(l => l.includes('\x1b[7m'))).toBe(true);
+    expect(list.render(40, 10).some(l => l.includes('\x1b[44m'))).toBe(true);
 
     // Novo press → highlight deve desaparecer
     list.handleMouse({ x: 1, y: 5, button: 0, isRelease: false });
-    expect(list.render(40, 10).some(l => l.includes('\x1b[7m'))).toBe(false);
+    expect(list.render(40, 10).some(l => l.includes('\x1b[44m'))).toBe(false);
   });
 
   test('scroll durante drag estende selCurrentIdx (updateSelOnScroll)', () => {
@@ -514,15 +514,131 @@ describe('MessageList — drag selection', () => {
     // Capturar selCurrentIdx antes do scroll
     // (não temos acesso direto ao campo privado, mas podemos checar via highlight)
     const linesBefore = list.render(40, 10);
-    const highlightedBefore = linesBefore.filter(l => l.includes('\x1b[7m')).length;
+    const highlightedBefore = linesBefore.filter(l => l.includes('\x1b[44m')).length;
 
     // Rolar para cima — selCurrentIdx deve se mover para cima em allLines-space
     list.scrollUp(3);
 
     const linesAfter = list.render(40, 10);
-    const highlightedAfter = linesAfter.filter(l => l.includes('\x1b[7m')).length;
+    const highlightedAfter = linesAfter.filter(l => l.includes('\x1b[44m')).length;
 
     // Após scroll de 3 linhas enquanto dragging no topo, mais linhas devem estar selecionadas
     expect(highlightedAfter).toBeGreaterThanOrEqual(highlightedBefore);
+  });
+});
+
+describe('MessageList — scrollbar mouse interaction', () => {
+  function makeMany(list: MessageList, n: number): void {
+    for (let i = 0; i < n; i++) {
+      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+  }
+
+  test('click no track acima do thumb → scroll up', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+    const width = 40, height = 10;
+    list.render(width, height);
+    // scrollOffset=0 (fundo), thumb está na parte inferior
+    expect(list.getScrollOffset()).toBe(0);
+
+    // Click no track acima do thumb (y=1, x=width = coluna do scrollbar)
+    list.handleMouse({ x: width, y: 1, button: 0, isRelease: false });
+    expect(list.getScrollOffset()).toBeGreaterThan(0);
+  });
+
+  test('click no track abaixo do thumb → scroll down', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+    const width = 40, height = 10;
+    // Scrollar para cima (offset máximo)
+    list.render(width, height);
+    list.scrollUp(100);
+    list.render(width, height);
+    const maxOffset = list.getScrollOffset();
+    expect(maxOffset).toBeGreaterThan(0);
+
+    // Click no track abaixo do thumb (y=height, x=width = coluna do scrollbar)
+    list.handleMouse({ x: width, y: height, button: 0, isRelease: false });
+    expect(list.getScrollOffset()).toBeLessThan(maxOffset);
+  });
+
+  test('click no thumb → inicia drag sem alterar scrollOffset', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+    const width = 40, height = 10;
+    list.render(width, height);
+    const offsetBefore = list.getScrollOffset();
+
+    // Thumb está na parte inferior quando scrollOffset=0
+    // Encontrar uma posição do thumb: última linha é provável
+    // Após render, o thumb position é armazenado internamente
+    // Clicar no thumb (posição inferior da viewport)
+    const thumbY = height; // thumb está no fundo quando offset=0
+    list.handleMouse({ x: width, y: thumbY, button: 0, isRelease: false });
+
+    // O offset pode mudar se clicamos no track, não no thumb
+    // Para testar que drag funciona, fazemos um drag subsequente
+    const dragConsumed = list.handleMouseDrag({ x: width, y: 1, button: 0 });
+    // Se drag foi consumido, o scrollbar drag está ativo
+    expect(dragConsumed).toBe(true);
+  });
+
+  test('drag do thumb → atualiza scrollOffset proporcionalmente', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+    const width = 40, height = 10;
+    list.render(width, height);
+
+    // Scrollar para cima para ter o thumb no meio
+    list.scrollUp(30);
+    list.render(width, height);
+
+    // Clicar no thumb (precisa encontrar a posição real do thumb)
+    // Acessar estado interno para o teste
+    const thumbPos = (list as any).lastScrollbarThumbPos as number;
+    const thumbY = thumbPos + 1; // converter 0-based para 1-based
+
+    list.handleMouse({ x: width, y: thumbY, button: 0, isRelease: false });
+
+    // Drag para o fundo da viewport (thumb no fundo = scrollOffset ≈ 0)
+    list.handleMouseDrag({ x: width, y: height, button: 0 });
+
+    // scrollOffset deve estar próximo de 0 (fundo)
+    expect(list.getScrollOffset()).toBeLessThanOrEqual(2);
+  });
+
+  test('click no scrollbar NÃO limpa seleção ativa', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+    const width = 40, height = 10;
+    list.render(width, height);
+
+    // Criar uma seleção: press → drag → release
+    list.handleMouse({ x: 5, y: 5, button: 0, isRelease: false });
+    list.handleMouseDrag({ x: 10, y: 7, button: 0 });
+    list.handleMouse({ x: 10, y: 7, button: 0, isRelease: true });
+    expect(list.isSelectionActive()).toBe(true);
+
+    // Click no scrollbar track
+    list.handleMouse({ x: width, y: 1, button: 0, isRelease: false });
+
+    // Seleção deve permanecer ativa
+    expect(list.isSelectionActive()).toBe(true);
+  });
+
+  test('margens: linha scrollável tem width total correto', () => {
+    const list = new MessageList();
+    makeMany(list, 30);
+    const width = 20, height = 5;
+    const lines = list.render(width, height);
+    expect(lines).toHaveLength(height);
+
+    // Cada linha deve ter visual width = 20 (conteúdo 18 + gap 1 + scrollbar 1 = 20)
+    for (const line of lines) {
+      const stripped = stripAnsi(line);
+      // measureWidth would be ideal but stripAnsi + length works for ASCII
+      expect(stripped.length).toBe(width);
+    }
   });
 });
