@@ -198,4 +198,21 @@ describe('ChatLayout — handleMouse', () => {
     const result = layout.handleMouse({ x: 10, y: 30, button: 0, isRelease: false });
     expect(result).toBe(false);
   });
+
+  test('handleMouseDrag na área de mensagens → delega para messageList', () => {
+    layout = new ChatLayout();
+    layout.render(80, 30);
+    // Setar um anchor primeiro (simular press)
+    layout.handleMouse({ x: 5, y: 1, button: 0, isRelease: false });
+    // Drag
+    const result = layout.handleMouseDrag({ x: 10, y: 3, button: 0 });
+    expect(result).toBe(true);
+  });
+
+  test('handleMouseDrag abaixo da área de mensagens → retorna false', () => {
+    layout = new ChatLayout();
+    layout.render(80, 30);
+    const result = layout.handleMouseDrag({ x: 5, y: 30, button: 0 });
+    expect(result).toBe(false);
+  });
 });

@@ -283,7 +283,7 @@ describe('MessageList — handleMouse', () => {
     };
   }
 
-  test('clique esquerdo numa linha de tool truncado → toggle collapsed', () => {
+  test('clique esquerdo (release) numa linha de tool truncado → toggle collapsed', () => {
     const list = new MessageList();
     const msg = makeTool('1', 10);
     list.addMessage(msg);
@@ -294,16 +294,16 @@ describe('MessageList — handleMouse', () => {
     const headerLineIdx = lines.findIndex(l => stripAnsi(l).includes('TestTool'));
     expect(headerLineIdx).toBeGreaterThanOrEqual(0);
 
-    const consumed = list.handleMouse({ x: 5, y: headerLineIdx + 1, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: headerLineIdx + 1, button: 0, isRelease: true });
     expect(consumed).toBe(true);
     expect(msg.toolCollapsed).toBe(!wasCollapsed);
   });
 
-  test('release event (isRelease=true) → não consome', () => {
+  test('press event (isRelease=false) → não consome (registra anchor)', () => {
     const list = new MessageList();
     list.addMessage(makeTool('1', 10));
     list.render(40, 20);
-    const consumed = list.handleMouse({ x: 5, y: 1, button: 0, isRelease: true });
+    const consumed = list.handleMouse({ x: 5, y: 1, button: 0, isRelease: false });
     expect(consumed).toBe(false);
   });
 
@@ -314,7 +314,7 @@ describe('MessageList — handleMouse', () => {
     const lines = list.render(40, 20);
     const headerLineIdx = lines.findIndex(l => stripAnsi(l).includes('TestTool'));
     expect(headerLineIdx).toBeGreaterThanOrEqual(0);
-    const consumed = list.handleMouse({ x: 5, y: headerLineIdx + 1, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: headerLineIdx + 1, button: 0, isRelease: true });
     expect(consumed).toBe(false);
   });
 
@@ -323,7 +323,7 @@ describe('MessageList — handleMouse', () => {
     list.addMessage(makeTool('1', 10));
     list.render(40, 20);
     // y=1 é padding (conteúdo fica nas últimas linhas com sticky bottom)
-    const consumed = list.handleMouse({ x: 5, y: 1, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: 1, button: 0, isRelease: true });
     // Pode ou não consumir dependendo da posição; só verificar que não lança exceção
     expect(typeof consumed).toBe('boolean');
   });
@@ -351,9 +351,9 @@ describe('MessageList — handleMouse', () => {
       const lines2 = list.render(40, 10);
       const idx2 = lines2.findIndex(l => stripAnsi(l).includes('TestTool'));
       if (idx2 < 0) return; // skip se tool não visível
-      list.handleMouse({ x: 5, y: idx2 + 1, button: 0, isRelease: false });
+      list.handleMouse({ x: 5, y: idx2 + 1, button: 0, isRelease: true });
     } else {
-      list.handleMouse({ x: 5, y: toolLineIdx + 1, button: 0, isRelease: false });
+      list.handleMouse({ x: 5, y: toolLineIdx + 1, button: 0, isRelease: true });
     }
 
     // Após expandir: deve ter scrollado para mostrar o início do tool message
@@ -390,7 +390,7 @@ describe('MessageList — handleMouse', () => {
     if (toolLineIdx < 0) return; // skip se não visível
 
     // Clicar para colapsar
-    const consumed = list.handleMouse({ x: 5, y: toolLineIdx + 1, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: toolLineIdx + 1, button: 0, isRelease: true });
     if (!consumed) return; // skip se não consumido (edge case de posição)
 
     // Após colapsar: NÃO deve ter saltado para o fundo
@@ -398,5 +398,61 @@ describe('MessageList — handleMouse', () => {
     expect(toolMsg.toolCollapsed).toBe(true);
     // scrollOffset > 0 indica que não saltou para o último msg
     expect(list.getScrollOffset()).toBeGreaterThan(0);
+  });
+});
+
+describe('MessageList — drag selection', () => {
+  test('handleMouseDrag sem pressionar → retorna false (sem anchor)', () => {
+    const list = new MessageList();
+    list.render(40, 10);
+    const result = list.handleMouseDrag({ x: 5, y: 3, button: 0 });
+    expect(result).toBe(false);
+    expect(list.getScrollOffset()).toBe(0); // sem efeitos colaterais
+  });
+
+  test('press → drag → isDragging=true após handleMouseDrag', () => {
+    const list = new MessageList();
+    list.addMessage({ id: 'u1', role: 'user', content: 'hello', timestamp: new Date() });
+    list.render(40, 10);
+    // Press
+    list.handleMouse({ x: 5, y: 9, button: 0, isRelease: false });
+    // Drag
+    const result = list.handleMouseDrag({ x: 10, y: 8, button: 0 });
+    expect(result).toBe(true);
+  });
+
+  test('drag seguido de release → chama onTextCopied, não faz expand/collapse', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 5; i++) {
+      list.addMessage({ id: `u${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+    let copied = '';
+    list.onTextCopied = (t) => { copied = t; };
+    list.render(40, 10);
+
+    // Press
+    list.handleMouse({ x: 1, y: 8, button: 0, isRelease: false });
+    // Drag
+    list.handleMouseDrag({ x: 5, y: 7, button: 0 });
+    // Release
+    const consumed = list.handleMouse({ x: 5, y: 7, button: 0, isRelease: true });
+
+    expect(consumed).toBe(true);
+    expect(copied.length).toBeGreaterThan(0);
+  });
+
+  test('clique simples (sem drag) → NÃO chama onTextCopied', () => {
+    const list = new MessageList();
+    list.addMessage({ id: 'u1', role: 'user', content: 'hello', timestamp: new Date() });
+    let copied = '';
+    list.onTextCopied = (t) => { copied = t; };
+    list.render(40, 10);
+
+    // Press
+    list.handleMouse({ x: 1, y: 10, button: 0, isRelease: false });
+    // Release imediato (sem drag)
+    list.handleMouse({ x: 1, y: 10, button: 0, isRelease: true });
+
+    expect(copied).toBe('');
   });
 });
