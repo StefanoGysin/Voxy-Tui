@@ -12,12 +12,13 @@ function formatTime(date: Date): string {
 const TOOL_COLLAPSED_OUTPUT_LINES = 3;
 
 // Scrollbar
-// Seleção de texto — reverse video (idêntico ao WezTerm Shift+drag nativo)
-const SEL_HL  = '\x1b[7m';   // reverse video: inverte fg/bg
-const SEL_RST = '\x1b[27m';  // cancela reverse video (não reset total)
+// Seleção de texto — blue background (preserva cores originais fora da seleção)
+const SEL_HL  = '\x1b[44m';  // blue background (standard, todos os terminais)
+const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/etc.)
 
 const SCROLLBAR_THUMB = '█';
 const SCROLLBAR_TRACK = '░';
+const SCROLLBAR_PAGE_LINES = 10;  // linhas por click no track do scrollbar
 
 function renderToolMessage(msg: ChatMessage, width: number): string[] {
   const name = msg.toolName ?? 'Tool';
@@ -109,6 +110,13 @@ export class MessageList implements Component {
   private isDragging:        boolean = false;
   private lastDragScreenY:   number  = -1;     // último screen-Y do drag (para scroll-extend)
   private lastAllLinesCount: number  = 0;      // cacheado em render() — necessário para scroll-extend
+
+  // Scrollbar interaction state
+  private isScrollable:               boolean = false;
+  private lastScrollbarThumbPos:      number  = 0;
+  private lastScrollbarThumbSize:     number  = 0;
+  private isScrollbarDrag:            boolean = false;
+  private scrollbarDragHandleOffset:  number  = 0;
 
   /** Callback chamado quando o usuário finaliza uma seleção. Recebe o texto selecionado. */
   onTextCopied?: (text: string) => void;
@@ -246,7 +254,7 @@ export class MessageList implements Component {
       return
     }
 
-    const contentWidth = width - 1
+    const contentWidth = width - 2  // 1 gap + 1 scrollbar
     const allLines: string[] = []
     for (const msg of this.messages) {
       allLines.push(...renderMessage(msg, contentWidth))
@@ -332,24 +340,25 @@ export class MessageList implements Component {
   ): string {
     if (selFromIdx < 0 || allLineIdx < selFromIdx || allLineIdx > selToIdx) return line
 
-    const stripped = stripAnsi(line)
-    const isFirst  = allLineIdx === selFromIdx
-    const isLast   = allLineIdx === selToIdx
+    const isFirst = allLineIdx === selFromIdx
+    const isLast  = allLineIdx === selToIdx
 
     const xStart = isFirst ? selFromX : 0
     // xEnd: -1 significa "até o fim da linha"
     const xEnd   = isLast  ? selToX   : -1
 
-    const bStart = byteIndexAtVisualCol(stripped, xStart)
-    // Para incluir o caractere em selToX, passar selToX+1 → slice vai até bEnd exclusive
-    const bEnd   = xEnd < 0 ? stripped.length : byteIndexAtVisualCol(stripped, xEnd + 1)
+    // Usar byteIndexAtVisualCol diretamente na linha original (com ANSI codes)
+    // A função ignora sequências ANSI ao contar colunas visuais
+    const bStart = byteIndexAtVisualCol(line, xStart)
+    const bEnd   = xEnd < 0 ? line.length : byteIndexAtVisualCol(line, xEnd + 1)
 
-    if (bStart >= bEnd) return line  // nada a destacar nesta linha
+    if (bStart >= bEnd) return line
 
+    // Injetar background na linha original, preservando ANSI fora da seleção
     return (
-      stripped.slice(0, bStart) +
-      SEL_HL + stripped.slice(bStart, bEnd) + SEL_RST +
-      stripped.slice(bEnd)
+      line.slice(0, bStart) +
+      SEL_HL + line.slice(bStart, bEnd) + SEL_RST +
+      line.slice(bEnd)
     )
   }
 
@@ -362,6 +371,32 @@ export class MessageList implements Component {
    * - RIGHT RELEASE com seleção ativa: copia texto + limpa seleção.
    */
   handleMouse(event: MouseClickEvent): boolean {
+    // === SCROLLBAR COLUMN — interceptar ANTES de tudo ===
+    if (this.isScrollable && event.x === this.lastRenderWidth) {
+      if (!event.isRelease) {
+        // Pressão no scrollbar — hit-test thumb vs. track
+        const screenY    = event.y - 1  // 0-based dentro da viewport
+        const thumbStart = this.lastScrollbarThumbPos
+        const thumbEnd   = thumbStart + this.lastScrollbarThumbSize
+
+        if (screenY >= thumbStart && screenY < thumbEnd) {
+          // Clique no THUMB → iniciar drag
+          this.isScrollbarDrag           = true
+          this.scrollbarDragHandleOffset = screenY - thumbStart
+        } else if (screenY < thumbStart) {
+          // Clique no TRACK acima do thumb → page up
+          this.scrollUp(SCROLLBAR_PAGE_LINES)
+        } else {
+          // Clique no TRACK abaixo do thumb → page down
+          this.scrollDown(SCROLLBAR_PAGE_LINES)
+        }
+      } else {
+        // Release no scrollbar → encerrar drag (se havia)
+        this.isScrollbarDrag = false
+      }
+      return true  // consumir evento — não iniciar seleção de texto
+    }
+
     // === RIGHT CLICK RELEASE → copiar seleção e limpar ===
     if (event.button === 2) {
       if (event.isRelease && this.isSelectionActive()) {
@@ -405,7 +440,7 @@ export class MessageList implements Component {
     const height = this.lastRenderHeight
     if (height <= 0 || width <= 0) return false
 
-    const contentWidth = width - 1
+    const contentWidth = width - 2  // 1 gap + 1 scrollbar
 
     // Construir mapeamento linha → mensagem
     const lineToMsg: (ChatMessage | null)[] = []
@@ -455,6 +490,27 @@ export class MessageList implements Component {
    * Converte screenY para allLines-index space e atualiza selCurrentIdx.
    */
   handleMouseDrag(event: MouseDragEvent): boolean {
+    // === SCROLLBAR DRAG ===
+    if (this.isScrollbarDrag) {
+      const height       = this.lastRenderHeight
+      const thumbSize    = this.lastScrollbarThumbSize
+      const trackRange   = height - thumbSize   // movimento máximo do thumb (0..trackRange)
+      const maxOffset    = Math.max(0, this.lastAllLinesCount - height)
+
+      if (trackRange > 0 && maxOffset > 0) {
+        // Posição do topo do thumb baseada na posição atual do mouse
+        const newThumbTop = (event.y - 1) - this.scrollbarDragHandleOffset
+        const clamped     = Math.max(0, Math.min(trackRange, newThumbTop))
+
+        // thumbTop=0 → scroll máximo (offset=maxOffset, conteúdo mais antigo visível)
+        // thumbTop=trackRange → offset=0 (fundo, conteúdo mais novo visível)
+        this.scrollOffset = Math.round(maxOffset * (1 - clamped / trackRange))
+        this.scrollOffset = Math.max(0, Math.min(maxOffset, this.scrollOffset))
+        this.stickyBottom = this.scrollOffset === 0
+      }
+      return true
+    }
+
     if (event.button !== 0) return false;
 
     // Drag sem press prévio (press veio de fora da área da MessageList)
@@ -497,6 +553,9 @@ export class MessageList implements Component {
       ? height - thumbSize
       : Math.round(((maxOffset - this.scrollOffset) / maxOffset) * (height - thumbSize));
 
+    this.lastScrollbarThumbPos  = thumbPos;
+    this.lastScrollbarThumbSize = thumbSize;
+
     const bar: string[] = [];
     for (let i = 0; i < height; i++) {
       if (i >= thumbPos && i < thumbPos + thumbSize) {
@@ -514,7 +573,7 @@ export class MessageList implements Component {
     this.lastRenderWidth = width;
     this.lastRenderHeight = height;
 
-    const contentWidth = width - 1;
+    const contentWidth = width - 2  // 1 gap + 1 scrollbar;
 
     // Renderizar todas as mensagens com contentWidth
     const allLines: string[] = [];
@@ -525,6 +584,7 @@ export class MessageList implements Component {
     this.lastAllLinesCount = allLines.length;
 
     const isScrollable = allLines.length > height;
+    this.isScrollable = isScrollable;
 
     // Normalizar seleção: garantir selFrom < selTo em allLines-index space
     let selFromIdx = -1, selFromX = 0, selToIdx = -1, selToX = 0
@@ -584,7 +644,7 @@ export class MessageList implements Component {
       // Não aplicar highlight à linha de hint (scrollOffset > 0, i === 0 substitui conteúdo)
       const isHint = this.scrollOffset > 0 && i === 0;
       const hl = isHint ? line : this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX)
-      return padEndAnsi(hl, contentWidth) + scrollbar[i];
+      return padEndAnsi(hl, contentWidth) + ' ' + scrollbar[i];
     });
   }
 }
