@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseKey, parseMouseScroll, parseMouseClick } from './input-parser';
+import { parseKey, parseMouseScroll, parseMouseClick, parseMouseDrag } from './input-parser';
 
 describe('parseKey', () => {
   test('converte tecla simples', () => {
@@ -85,5 +85,39 @@ describe('parseMouseClick', () => {
 
   test('retorna null para movimento (btn=32)', () => {
     expect(parseMouseClick('\x1b[<32;10;5M')).toBeNull();
+  });
+});
+
+describe('parseMouseDrag', () => {
+  test('esquerdo held + move → MouseDragEvent button=0', () => {
+    const ev = parseMouseDrag('\x1b[<32;15;7M');
+    expect(ev).not.toBeNull();
+    expect(ev!.button).toBe(0);
+    expect(ev!.x).toBe(15);
+    expect(ev!.y).toBe(7);
+  });
+
+  test('meio held + move → button=1', () => {
+    const ev = parseMouseDrag('\x1b[<33;10;5M');
+    expect(ev).not.toBeNull();
+    expect(ev!.button).toBe(1);
+  });
+
+  test('direito held + move → button=2', () => {
+    const ev = parseMouseDrag('\x1b[<34;3;2M');
+    expect(ev).not.toBeNull();
+    expect(ev!.button).toBe(2);
+  });
+
+  test('press (sem bit 32) → null', () => {
+    expect(parseMouseDrag('\x1b[<0;5;3M')).toBeNull();
+  });
+
+  test('release (m minúsculo) → null', () => {
+    expect(parseMouseDrag('\x1b[<0;5;3m')).toBeNull();
+  });
+
+  test('scroll (btn=64) → null', () => {
+    expect(parseMouseDrag('\x1b[<64;5;3M')).toBeNull();
   });
 });

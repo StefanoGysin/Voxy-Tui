@@ -1,4 +1,4 @@
-import type { KeyEvent, MouseClickEvent } from '../core/component';
+import type { KeyEvent, MouseClickEvent, MouseDragEvent } from '../core/component';
 
 /**
  * Formato do objeto key emitido pelo Node.js readline.emitKeypressEvents().
@@ -107,4 +107,27 @@ export function parseMouseClick(seq: string): MouseClickEvent | null {
     button: btn & 3,
     isRelease: lastChar === 'm',
   };
+}
+
+/**
+ * Tenta interpretar uma sequência SGR como evento de drag do mouse.
+ * Formato: \x1b[<btn;x;yM onde btn & 32 !== 0 e btn < 64.
+ *
+ * btn=32 → esquerdo+move, btn=33 → meio+move, btn=34 → direito+move.
+ * Retorna null para qualquer sequência não reconhecida.
+ */
+export function parseMouseDrag(seq: string): MouseDragEvent | null {
+  if (!seq.startsWith('\x1b[<')) return null;
+  const inner = seq.slice(3);
+  const lastChar = inner.slice(-1);
+  if (lastChar !== 'M') return null;          // drag nunca emite 'm' (release)
+  const parts = inner.slice(0, -1).split(';');
+  if (parts.length < 3) return null;
+  const btn = parseInt(parts[0], 10);
+  const x   = parseInt(parts[1], 10);
+  const y   = parseInt(parts[2], 10);
+  if (Number.isNaN(btn) || Number.isNaN(x) || Number.isNaN(y)) return null;
+  // Drag: bit 32 set, não é scroll (btn < 64)
+  if ((btn & 32) === 0 || btn >= 64) return null;
+  return { x, y, button: btn & 3 };
 }

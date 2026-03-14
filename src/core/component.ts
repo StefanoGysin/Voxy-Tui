@@ -22,6 +22,19 @@ export interface MouseClickEvent {
   isRelease: boolean;
 }
 
+/**
+ * Evento de movimento do mouse com botão pressionado (drag).
+ * Emitido quando mouse tracking mode ?1002h está ativo.
+ */
+export interface MouseDragEvent {
+  /** Coluna (1-based). */
+  x: number;
+  /** Linha (1-based). */
+  y: number;
+  /** Botão que está pressionado: 0=esquerdo, 1=meio, 2=direito. */
+  button: number;
+}
+
 export interface Component {
   /** Render the component to an array of strings (one per line). */
   render(width: number, height: number): string[];
@@ -31,6 +44,9 @@ export interface Component {
 
   /** Handle a mouse click event. Return true if the event was consumed. */
   handleMouse?(event: MouseClickEvent): boolean;
+
+  /** Handle a mouse drag (motion while button held). Return true if consumed. */
+  handleMouseDrag?(event: MouseDragEvent): boolean;
 
   /** Called when the component gains focus. */
   onFocus?(): void;
