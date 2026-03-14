@@ -100,10 +100,13 @@ export class MessageList implements Component {
   private lastRenderWidth = 0;
   private lastRenderHeight = 0;
 
-  // Seleção por drag do mouse
-  private dragAnchor:  { x: number; y: number } | null = null;
-  private dragCurrent: { x: number; y: number } | null = null;
-  private isDragging = false;
+  // Seleção por drag — estado em allLines-index space (não screen-space)
+  private selAnchorIdx:     number  = -1;     // índice em allLines do âncora
+  private selCurrentIdx:    number  = -1;     // índice em allLines do cursor atual
+  private selFinalized:     boolean = false;  // true após copy; highlight persiste
+  private isDragging:       boolean = false;
+  private lastDragScreenY:  number  = -1;     // último screen-Y do drag (para scroll-extend)
+  private lastAllLinesCount: number = 0;      // cacheado em render() — necessário para scroll-extend
 
   /** Callback chamado quando o usuário finaliza uma seleção. Recebe o texto selecionado. */
   onTextCopied?: (text: string) => void;
@@ -126,6 +129,7 @@ export class MessageList implements Component {
   scrollUp(lines = 1): void {
     this.scrollOffset += lines;
     this.stickyBottom = false;
+    this.updateSelOnScroll();
   }
 
   scrollDown(lines = 1): void {
@@ -133,6 +137,22 @@ export class MessageList implements Component {
     if (this.scrollOffset === 0) {
       this.stickyBottom = true;
     }
+    this.updateSelOnScroll();
+  }
+
+  /**
+   * Recomputa selCurrentIdx após mudança de scrollOffset enquanto arrasta.
+   * Usa o último screen-Y do mouse (lastDragScreenY) com o novo scrollOffset.
+   * Sem isso, rolar o viewport não estende a seleção.
+   */
+  private updateSelOnScroll(): void {
+    if (!this.isDragging || this.lastDragScreenY < 0) return;
+    const total  = this.lastAllLinesCount;
+    const height = this.lastRenderHeight;
+    if (total <= 0 || height <= 0) return;
+    this.selCurrentIdx = Math.max(0, Math.min(total - 1,
+      this.screenYToAllLineIdx(this.lastDragScreenY, total, height),
+    ));
   }
 
   scrollToBottom(): void {
@@ -202,16 +222,19 @@ export class MessageList implements Component {
   }
 
   /**
-   * Finaliza a seleção por drag: extrai o texto selecionado, chama onTextCopied,
-   * e limpa o estado de drag.
+   * Finaliza a seleção por drag: extrai o texto, chama onTextCopied,
+   * e seta selFinalized=true para manter o highlight visível após o release.
+   * Os índices selAnchorIdx/selCurrentIdx NÃO são apagados aqui.
    */
   private finalizeSelection(): void {
     const width  = this.lastRenderWidth;
     const height = this.lastRenderHeight;
-    if (height <= 0 || width <= 0 || !this.dragAnchor || !this.dragCurrent) {
-      this.dragAnchor  = null;
-      this.dragCurrent = null;
-      this.isDragging  = false;
+
+    // Limpar drag state mesmo que não consiga copiar
+    this.isDragging      = false;
+    this.lastDragScreenY = -1;
+
+    if (height <= 0 || width <= 0 || this.selAnchorIdx < 0 || this.selCurrentIdx < 0) {
       return;
     }
 
@@ -222,10 +245,8 @@ export class MessageList implements Component {
     }
     const total = allLines.length;
 
-    const anchorIdx  = this.screenYToAllLineIdx(this.dragAnchor.y,  total, height);
-    const currentIdx = this.screenYToAllLineIdx(this.dragCurrent.y, total, height);
-    const selStart = Math.max(0, Math.min(anchorIdx, currentIdx));
-    const selEnd   = Math.min(total - 1, Math.max(anchorIdx, currentIdx));
+    const selStart = Math.max(0,         Math.min(this.selAnchorIdx, this.selCurrentIdx));
+    const selEnd   = Math.min(total - 1, Math.max(this.selAnchorIdx, this.selCurrentIdx));
 
     if (selStart <= selEnd) {
       const text = allLines
@@ -237,9 +258,8 @@ export class MessageList implements Component {
       }
     }
 
-    this.dragAnchor  = null;
-    this.dragCurrent = null;
-    this.isDragging  = false;
+    // MANTER selAnchorIdx/selCurrentIdx — highlight persiste até próximo press
+    this.selFinalized = true;
   }
 
   /** Aplica fundo azul à linha se está no range de seleção [selStart, selEnd]. */
@@ -252,34 +272,43 @@ export class MessageList implements Component {
   /**
    * Trata clique e release do mouse na área do MessageList.
    *
-   * - PRESS: apenas registra o ancor de seleção potencial. Não age ainda.
-   * - RELEASE sem drag (isDragging=false): executa expand/collapse do tool message.
-   * - RELEASE com drag (isDragging=true): finaliza seleção de texto e copia.
-   *
-   * Retorna true se o evento foi consumido.
+   * - PRESS: limpa seleção anterior, registra âncora em allLines-index space.
+   * - RELEASE sem drag: executa expand/collapse do tool message.
+   * - RELEASE com drag: finaliza seleção, copia, mantém highlight.
    */
   handleMouse(event: MouseClickEvent): boolean {
     if (event.button !== 0) return false;
 
-    // === PRESS — registrar âncora, não agir ainda ===
+    // === PRESS — registrar âncora e limpar seleção anterior ===
     if (!event.isRelease) {
-      this.dragAnchor  = { x: event.x, y: event.y };
-      this.dragCurrent = null;
-      this.isDragging  = false;
-      return false; // press nunca consume o evento
+      // Novo press: apaga qualquer highlight persistente de seleção anterior
+      this.selAnchorIdx  = -1;
+      this.selCurrentIdx = -1;
+      this.selFinalized  = false;
+      this.isDragging    = false;
+      this.lastDragScreenY = event.y;
+
+      // Converter imediatamente para allLines-index space
+      const total  = this.lastAllLinesCount;
+      const height = this.lastRenderHeight;
+      if (total > 0 && height > 0) {
+        const idx = this.screenYToAllLineIdx(event.y, total, height);
+        this.selAnchorIdx = Math.max(0, Math.min(total - 1, idx));
+      }
+      return false; // press não consome
     }
 
-    // === RELEASE ===
-
-    // Caso 1: havia drag → finalizar seleção
-    if (this.isDragging && this.dragAnchor && this.dragCurrent) {
+    // === RELEASE com drag → finalizar seleção ===
+    if (this.isDragging && this.selAnchorIdx >= 0 && this.selCurrentIdx >= 0) {
       this.finalizeSelection();
       return true;
     }
 
-    // Caso 2: clique simples (sem drag) → expand/collapse tool message
-    this.dragAnchor = null;
-    this.isDragging = false;
+    // === RELEASE sem drag → click (expand/collapse tool message) ===
+    this.selAnchorIdx    = -1;
+    this.selCurrentIdx   = -1;
+    this.isDragging      = false;
+    this.lastDragScreenY = -1;
 
     const width  = this.lastRenderWidth;
     const height = this.lastRenderHeight;
@@ -331,29 +360,44 @@ export class MessageList implements Component {
   }
 
   /**
-   * Trata motion events do mouse com botão esquerdo pressionado (drag).
-   * Atualiza dragCurrent e ativa isDragging.
-   * Retorna true se o evento foi consumido.
+   * Trata motion events com botão esquerdo pressionado (drag).
+   * Converte screenY para allLines-index space e atualiza selCurrentIdx.
    */
   handleMouseDrag(event: MouseDragEvent): boolean {
     if (event.button !== 0) return false;
-    if (!this.dragAnchor) {
-      // Drag sem press prévio (possível se press veio de fora da área) — ignorar
-      return false;
+
+    // Drag sem press prévio (press veio de fora da área da MessageList)
+    if (this.selAnchorIdx < 0) return false;
+
+    const total  = this.lastAllLinesCount;
+    const height = this.lastRenderHeight;
+    if (total <= 0 || height <= 0) return false;
+
+    const idx = Math.max(0, Math.min(total - 1,
+      this.screenYToAllLineIdx(event.y, total, height),
+    ));
+
+    this.lastDragScreenY = event.y;
+    this.selCurrentIdx   = idx;
+    this.selFinalized    = false;
+
+    if (!this.isDragging) {
+      this.isDragging = true;
     }
-    this.isDragging  = true;
-    this.dragCurrent = { x: event.x, y: event.y };
+
     return true;
   }
 
   clear(): void {
-    this.messages = [];
+    this.messages     = [];
     this.scrollOffset = 0;
     this.stickyBottom = true;
-    // Limpar seleção pendente
-    this.dragAnchor  = null;
-    this.dragCurrent = null;
-    this.isDragging  = false;
+    // Limpar todo o estado de seleção
+    this.selAnchorIdx    = -1;
+    this.selCurrentIdx   = -1;
+    this.selFinalized    = false;
+    this.isDragging      = false;
+    this.lastDragScreenY = -1;
   }
 
   /**
@@ -390,18 +434,20 @@ export class MessageList implements Component {
     for (const msg of this.messages) {
       allLines.push(...renderMessage(msg, contentWidth));
     }
+    // Cachear count para uso em updateSelOnScroll() (scroll durante drag)
+    this.lastAllLinesCount = allLines.length;
 
     const isScrollable = allLines.length > height;
 
-    // Calcular range de seleção em allLines-space (para highlight)
+    // Calcular range de seleção — agora usa índices diretos (sem conversão)
     let selStart = -1;
     let selEnd   = -1;
-    if (this.isDragging && this.dragAnchor && this.dragCurrent) {
-      const total = allLines.length;
-      const ai = this.screenYToAllLineIdx(this.dragAnchor.y,  total, height);
-      const ci = this.screenYToAllLineIdx(this.dragCurrent.y, total, height);
-      selStart = Math.max(0,         Math.min(ai, ci));
-      selEnd   = Math.min(total - 1, Math.max(ai, ci));
+    if ((this.isDragging || this.selFinalized) && this.selAnchorIdx >= 0 && this.selCurrentIdx >= 0) {
+      selStart = Math.min(this.selAnchorIdx, this.selCurrentIdx);
+      selEnd   = Math.max(this.selAnchorIdx, this.selCurrentIdx);
+      // Clamp ao range válido
+      selStart = Math.max(0, selStart);
+      selEnd   = Math.min(allLines.length - 1, selEnd);
     }
 
     // === Caso: conteúdo cabe na viewport (sem scrollbar) ===

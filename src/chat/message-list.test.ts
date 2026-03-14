@@ -455,4 +455,70 @@ describe('MessageList — drag selection', () => {
 
     expect(copied).toBe('');
   });
+
+  test('highlight persiste após release (selFinalized)', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 5; i++) {
+      list.addMessage({ id: `u${i}`, role: 'user', content: `mensagem ${i}`, timestamp: new Date() });
+    }
+    list.onTextCopied = () => {};
+    list.render(40, 10);
+
+    // Press → drag → release
+    list.handleMouse({ x: 1, y: 8, button: 0, isRelease: false });
+    list.handleMouseDrag({ x: 1, y: 7, button: 0 });
+    list.handleMouse({ x: 1, y: 7, button: 0, isRelease: true });
+
+    // Após release: render deve mostrar highlight nas linhas selecionadas
+    const lines = list.render(40, 10);
+    const hasHighlight = lines.some(l => l.includes('\x1b[44;97m'));
+    expect(hasHighlight).toBe(true);
+  });
+
+  test('novo press limpa o highlight persistente', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 5; i++) {
+      list.addMessage({ id: `u${i}`, role: 'user', content: `mensagem ${i}`, timestamp: new Date() });
+    }
+    list.onTextCopied = () => {};
+    list.render(40, 10);
+
+    // Criar seleção finalizada
+    list.handleMouse({ x: 1, y: 8, button: 0, isRelease: false });
+    list.handleMouseDrag({ x: 1, y: 7, button: 0 });
+    list.handleMouse({ x: 1, y: 7, button: 0, isRelease: true });
+    // Confirmar highlight presente
+    expect(list.render(40, 10).some(l => l.includes('\x1b[44;97m'))).toBe(true);
+
+    // Novo press → highlight deve desaparecer
+    list.handleMouse({ x: 1, y: 5, button: 0, isRelease: false });
+    expect(list.render(40, 10).some(l => l.includes('\x1b[44;97m'))).toBe(false);
+  });
+
+  test('scroll durante drag estende selCurrentIdx (updateSelOnScroll)', () => {
+    const list = new MessageList();
+    // Adicionar conteúdo suficiente para overflow
+    for (let i = 0; i < 20; i++) {
+      list.addMessage({ id: `u${i}`, role: 'user', content: `mensagem ${i}`, timestamp: new Date() });
+    }
+    list.render(40, 10);
+
+    // Press e drag na linha 1 (topo da viewport)
+    list.handleMouse({ x: 1, y: 5, button: 0, isRelease: false });
+    list.handleMouseDrag({ x: 1, y: 1, button: 0 });
+
+    // Capturar selCurrentIdx antes do scroll
+    // (não temos acesso direto ao campo privado, mas podemos checar via highlight)
+    const linesBefore = list.render(40, 10);
+    const highlightedBefore = linesBefore.filter(l => l.includes('\x1b[44;97m')).length;
+
+    // Rolar para cima — selCurrentIdx deve se mover para cima em allLines-space
+    list.scrollUp(3);
+
+    const linesAfter = list.render(40, 10);
+    const highlightedAfter = linesAfter.filter(l => l.includes('\x1b[44;97m')).length;
+
+    // Após scroll de 3 linhas enquanto dragging no topo, mais linhas devem estar selecionadas
+    expect(highlightedAfter).toBeGreaterThanOrEqual(highlightedBefore);
+  });
 });

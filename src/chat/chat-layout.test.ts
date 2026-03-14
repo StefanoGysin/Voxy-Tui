@@ -201,6 +201,7 @@ describe('ChatLayout — handleMouse', () => {
 
   test('handleMouseDrag na área de mensagens → delega para messageList', () => {
     layout = new ChatLayout();
+    layout.messageList.addMessage({ id: '1', role: 'user', content: 'hello', timestamp: new Date() });
     layout.render(80, 30);
     // Setar um anchor primeiro (simular press)
     layout.handleMouse({ x: 5, y: 1, button: 0, isRelease: false });
