@@ -1,4 +1,4 @@
-import type { Component, KeyEvent, MouseClickEvent } from '../core/component';
+import type { Component, KeyEvent, MouseClickEvent, MouseDragEvent } from '../core/component';
 import { MessageList } from './message-list';
 import { InputBar } from './input-bar';
 import { StatusBar } from './status-bar';
@@ -54,6 +54,17 @@ export class ChatLayout implements Component {
   handleMouse(event: MouseClickEvent): boolean {
     if (event.y >= 1 && event.y <= this.lastMessagesHeight) {
       return this.messageList.handleMouse?.(event) ?? false;
+    }
+    return false;
+  }
+
+  /**
+   * Despacha drag do mouse para o componente correto.
+   * Drag na área de mensagens → MessageList.
+   */
+  handleMouseDrag(event: MouseDragEvent): boolean {
+    if (event.y >= 1 && event.y <= this.lastMessagesHeight) {
+      return this.messageList.handleMouseDrag?.(event) ?? false;
     }
     return false;
   }
