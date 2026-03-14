@@ -2,7 +2,7 @@ import type { Component, MouseClickEvent, MouseDragEvent } from '../core/compone
 import type { ChatMessage } from './types';
 import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED } from '../core/ansi';
 import { wrapText } from '../utils/wrap';
-import { padEndAnsi } from '../utils/width';
+import { padEndAnsi, byteIndexAtVisualCol } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 
 function formatTime(date: Date): string {
@@ -12,9 +12,9 @@ function formatTime(date: Date): string {
 const TOOL_COLLAPSED_OUTPUT_LINES = 3;
 
 // Scrollbar
-// Seleção de texto — highlight azul
-const SEL_BG  = '\x1b[44;97m';  // fundo azul (ANSI 44) + texto branco brilhante (97)
-const SEL_RST = '\x1b[0m';
+// Seleção de texto — reverse video (idêntico ao WezTerm Shift+drag nativo)
+const SEL_HL  = '\x1b[7m';   // reverse video: inverte fg/bg
+const SEL_RST = '\x1b[27m';  // cancela reverse video (não reset total)
 
 const SCROLLBAR_THUMB = '█';
 const SCROLLBAR_TRACK = '░';
@@ -101,15 +101,27 @@ export class MessageList implements Component {
   private lastRenderHeight = 0;
 
   // Seleção por drag — estado em allLines-index space (não screen-space)
-  private selAnchorIdx:     number  = -1;     // índice em allLines do âncora
-  private selCurrentIdx:    number  = -1;     // índice em allLines do cursor atual
-  private selFinalized:     boolean = false;  // true após copy; highlight persiste
-  private isDragging:       boolean = false;
-  private lastDragScreenY:  number  = -1;     // último screen-Y do drag (para scroll-extend)
-  private lastAllLinesCount: number = 0;      // cacheado em render() — necessário para scroll-extend
+  private selAnchorIdx:      number  = -1;     // índice em allLines do âncora
+  private selAnchorX:        number  = 0;      // coluna visual (0-based) do âncora
+  private selCurrentIdx:     number  = -1;     // índice em allLines do cursor atual
+  private selCurrentX:       number  = 0;      // coluna visual (0-based) do cursor atual
+  private selFinalized:      boolean = false;  // true após drag release; highlight persiste até right-click
+  private isDragging:        boolean = false;
+  private lastDragScreenY:   number  = -1;     // último screen-Y do drag (para scroll-extend)
+  private lastAllLinesCount: number  = 0;      // cacheado em render() — necessário para scroll-extend
 
   /** Callback chamado quando o usuário finaliza uma seleção. Recebe o texto selecionado. */
   onTextCopied?: (text: string) => void;
+
+  /**
+   * Retorna true se há uma seleção ativa (durante drag ou após release com highlight).
+   * Usado por ChatLayout.handleKey para bloquear Enter enquanto seleção visível.
+   */
+  isSelectionActive(): boolean {
+    return (this.isDragging || this.selFinalized) &&
+           this.selAnchorIdx >= 0 &&
+           this.selCurrentIdx >= 0
+  }
 
   addMessage(message: ChatMessage): void {
     this.messages.push(message);
@@ -222,141 +234,220 @@ export class MessageList implements Component {
   }
 
   /**
-   * Finaliza a seleção por drag: extrai o texto, chama onTextCopied,
-   * e seta selFinalized=true para manter o highlight visível após o release.
-   * Os índices selAnchorIdx/selCurrentIdx NÃO são apagados aqui.
+   * Copia o texto selecionado (com precisão de coluna) via onTextCopied,
+   * e limpa todo o estado de seleção.
+   * Chamado pelo right-click release.
    */
-  private finalizeSelection(): void {
-    const width  = this.lastRenderWidth;
-    const height = this.lastRenderHeight;
-
-    // Limpar drag state mesmo que não consiga copiar
-    this.isDragging      = false;
-    this.lastDragScreenY = -1;
-
+  private copyAndClearSelection(): void {
+    const width  = this.lastRenderWidth
+    const height = this.lastRenderHeight
     if (height <= 0 || width <= 0 || this.selAnchorIdx < 0 || this.selCurrentIdx < 0) {
-      return;
+      this.clearSelectionState()
+      return
     }
 
-    const contentWidth = width - 1;
-    const allLines: string[] = [];
+    const contentWidth = width - 1
+    const allLines: string[] = []
     for (const msg of this.messages) {
-      allLines.push(...renderMessage(msg, contentWidth));
+      allLines.push(...renderMessage(msg, contentWidth))
     }
-    const total = allLines.length;
+    const total = allLines.length
 
-    const selStart = Math.max(0,         Math.min(this.selAnchorIdx, this.selCurrentIdx));
-    const selEnd   = Math.min(total - 1, Math.max(this.selAnchorIdx, this.selCurrentIdx));
+    // Normalizar: garantir que from < to em allLines-index space
+    const anchorFirst =
+      this.selAnchorIdx < this.selCurrentIdx ||
+      (this.selAnchorIdx === this.selCurrentIdx && this.selAnchorX <= this.selCurrentX)
+
+    const fromIdx = anchorFirst ? this.selAnchorIdx  : this.selCurrentIdx
+    const fromX   = anchorFirst ? this.selAnchorX    : this.selCurrentX
+    const toIdx   = anchorFirst ? this.selCurrentIdx : this.selAnchorIdx
+    const toX     = anchorFirst ? this.selCurrentX   : this.selAnchorX
+
+    const selStart = Math.max(0,         fromIdx)
+    const selEnd   = Math.min(total - 1, toIdx)
 
     if (selStart <= selEnd) {
-      const text = allLines
+      const stripped = allLines
         .slice(selStart, selEnd + 1)
         .map(l => stripAnsi(l).trimEnd())
-        .join('\n');
+
+      let text: string
+      if (selStart === selEnd) {
+        // Linha única
+        const bStart = byteIndexAtVisualCol(stripped[0], fromX)
+        const bEnd   = byteIndexAtVisualCol(stripped[0], toX + 1)
+        text = stripped[0].slice(bStart, bEnd)
+      } else {
+        // Múltiplas linhas
+        const firstLine = stripped[0]
+        const lastLine  = stripped[stripped.length - 1]
+        const bFirstStart = byteIndexAtVisualCol(firstLine, fromX)
+        const bLastEnd    = byteIndexAtVisualCol(lastLine,  toX + 1)
+        const parts: string[] = [
+          firstLine.slice(bFirstStart),
+          ...stripped.slice(1, stripped.length - 1),
+          lastLine.slice(0, bLastEnd),
+        ]
+        text = parts.join('\n')
+      }
+
       if (text.trim().length > 0) {
-        this.onTextCopied?.(text);
+        this.onTextCopied?.(text)
       }
     }
 
-    // MANTER selAnchorIdx/selCurrentIdx — highlight persiste até próximo press
-    this.selFinalized = true;
+    // Limpar toda a seleção
+    this.clearSelectionState()
   }
 
-  /** Aplica fundo azul à linha se está no range de seleção [selStart, selEnd]. */
-  private applySelHL(line: string, allLineIdx: number,
-                     selStart: number, selEnd: number): string {
-    if (selStart < 0 || allLineIdx < selStart || allLineIdx > selEnd) return line;
-    return SEL_BG + stripAnsi(line) + SEL_RST;
+  /** Limpa todo o estado de seleção. */
+  private clearSelectionState(): void {
+    this.selAnchorIdx  = -1
+    this.selAnchorX    = 0
+    this.selCurrentIdx = -1
+    this.selCurrentX   = 0
+    this.selFinalized  = false
+    this.isDragging    = false
+    this.lastDragScreenY = -1
+  }
+
+  /**
+   * Aplica reverse video à parte selecionada da linha.
+   *
+   * - Linha fora do range → retorna sem modificação.
+   * - Primeira linha da seleção → highlight de selFromX até o fim.
+   * - Última linha da seleção → highlight do início até selToX (inclusive).
+   * - Linha única (first === last) → highlight de selFromX até selToX.
+   * - Linha do meio → highlight da linha inteira.
+   *
+   * Usa stripAnsi para evitar que códigos ANSI existentes interfiram com
+   * as posições visuais. O texto fora da seleção mantém suas cores originais
+   * (exceto na parte selecionada, que é stripada e envolvida em reverse video).
+   */
+  private applySelHL(
+    line:       string,
+    allLineIdx: number,
+    selFromIdx: number, selFromX: number,
+    selToIdx:   number, selToX:   number,
+  ): string {
+    if (selFromIdx < 0 || allLineIdx < selFromIdx || allLineIdx > selToIdx) return line
+
+    const stripped = stripAnsi(line)
+    const isFirst  = allLineIdx === selFromIdx
+    const isLast   = allLineIdx === selToIdx
+
+    const xStart = isFirst ? selFromX : 0
+    // xEnd: -1 significa "até o fim da linha"
+    const xEnd   = isLast  ? selToX   : -1
+
+    const bStart = byteIndexAtVisualCol(stripped, xStart)
+    // Para incluir o caractere em selToX, passar selToX+1 → slice vai até bEnd exclusive
+    const bEnd   = xEnd < 0 ? stripped.length : byteIndexAtVisualCol(stripped, xEnd + 1)
+
+    if (bStart >= bEnd) return line  // nada a destacar nesta linha
+
+    return (
+      stripped.slice(0, bStart) +
+      SEL_HL + stripped.slice(bStart, bEnd) + SEL_RST +
+      stripped.slice(bEnd)
+    )
   }
 
   /**
    * Trata clique e release do mouse na área do MessageList.
    *
-   * - PRESS: limpa seleção anterior, registra âncora em allLines-index space.
-   * - RELEASE sem drag: executa expand/collapse do tool message.
-   * - RELEASE com drag: finaliza seleção, copia, mantém highlight.
+   * - LEFT PRESS: limpa seleção anterior, registra âncora em allLines-index space.
+   * - LEFT RELEASE com drag: mantém highlight (sem copiar).
+   * - LEFT RELEASE sem drag: executa expand/collapse do tool message.
+   * - RIGHT RELEASE com seleção ativa: copia texto + limpa seleção.
    */
   handleMouse(event: MouseClickEvent): boolean {
-    if (event.button !== 0) return false;
-
-    // === PRESS — registrar âncora e limpar seleção anterior ===
-    if (!event.isRelease) {
-      // Novo press: apaga qualquer highlight persistente de seleção anterior
-      this.selAnchorIdx  = -1;
-      this.selCurrentIdx = -1;
-      this.selFinalized  = false;
-      this.isDragging    = false;
-      this.lastDragScreenY = event.y;
-
-      // Converter imediatamente para allLines-index space
-      const total  = this.lastAllLinesCount;
-      const height = this.lastRenderHeight;
-      if (total > 0 && height > 0) {
-        const idx = this.screenYToAllLineIdx(event.y, total, height);
-        this.selAnchorIdx = Math.max(0, Math.min(total - 1, idx));
+    // === RIGHT CLICK RELEASE → copiar seleção e limpar ===
+    if (event.button === 2) {
+      if (event.isRelease && this.isSelectionActive()) {
+        this.copyAndClearSelection()
+        return true
       }
-      return false; // press não consome
+      return false
     }
 
-    // === RELEASE com drag → finalizar seleção ===
+    // Ignorar tudo que não for botão esquerdo (button=0)
+    if (event.button !== 0) return false
+
+    // === LEFT PRESS — registrar âncora e limpar seleção anterior ===
+    if (!event.isRelease) {
+      this.clearSelectionState()
+      this.lastDragScreenY = event.y
+
+      // Converter para allLines-index space e registrar âncora com coluna X
+      const total  = this.lastAllLinesCount
+      const height = this.lastRenderHeight
+      if (total > 0 && height > 0) {
+        const idx = this.screenYToAllLineIdx(event.y, total, height)
+        this.selAnchorIdx = Math.max(0, Math.min(total - 1, idx))
+        this.selAnchorX   = Math.max(0, event.x - 1)  // converter 1-based → 0-based
+      }
+      return false   // press não consome
+    }
+
+    // === LEFT RELEASE com drag → manter highlight (sem copiar) ===
     if (this.isDragging && this.selAnchorIdx >= 0 && this.selCurrentIdx >= 0) {
-      this.finalizeSelection();
-      return true;
+      this.isDragging      = false
+      this.lastDragScreenY = -1
+      this.selFinalized    = true
+      return true
     }
 
-    // === RELEASE sem drag → click (expand/collapse tool message) ===
-    this.selAnchorIdx    = -1;
-    this.selCurrentIdx   = -1;
-    this.isDragging      = false;
-    this.lastDragScreenY = -1;
+    // === LEFT RELEASE sem drag → click (expand/collapse tool message) ===
+    this.clearSelectionState()
 
-    const width  = this.lastRenderWidth;
-    const height = this.lastRenderHeight;
-    if (height <= 0 || width <= 0) return false;
+    const width  = this.lastRenderWidth
+    const height = this.lastRenderHeight
+    if (height <= 0 || width <= 0) return false
 
-    const contentWidth = width - 1;
+    const contentWidth = width - 1
 
     // Construir mapeamento linha → mensagem
-    const lineToMsg: (ChatMessage | null)[] = [];
-    const msgStartMap = new Map<ChatMessage, number>();
+    const lineToMsg: (ChatMessage | null)[] = []
+    const msgStartMap = new Map<ChatMessage, number>()
     for (const msg of this.messages) {
-      msgStartMap.set(msg, lineToMsg.length);
-      const msgLines = renderMessage(msg, contentWidth);
+      msgStartMap.set(msg, lineToMsg.length)
+      const msgLines = renderMessage(msg, contentWidth)
       for (let i = 0; i < msgLines.length; i++) {
-        lineToMsg.push(msg);
+        lineToMsg.push(msg)
       }
     }
 
-    const total = lineToMsg.length;
-    const allLineIdx = this.screenYToAllLineIdx(event.y, total, height);
+    const total = lineToMsg.length
+    const allLineIdx = this.screenYToAllLineIdx(event.y, total, height)
 
-    if (allLineIdx < 0 || allLineIdx >= total) return false;
-    const msg = lineToMsg[allLineIdx];
-    if (!msg || msg.role !== 'tool') return false;
-    if ((msg.toolOutput?.length ?? 0) <= TOOL_COLLAPSED_OUTPUT_LINES) return false;
+    if (allLineIdx < 0 || allLineIdx >= total) return false
+    const msg = lineToMsg[allLineIdx]
+    if (!msg || msg.role !== 'tool') return false
+    if ((msg.toolOutput?.length ?? 0) <= TOOL_COLLAPSED_OUTPUT_LINES) return false
 
-    const wasCollapsed = msg.toolCollapsed !== false;
-    const oldLen = renderMessage(msg, contentWidth).length;
+    const wasCollapsed = msg.toolCollapsed !== false
+    const oldLen = renderMessage(msg, contentWidth).length
 
-    msg.toolCollapsed = !msg.toolCollapsed;
+    msg.toolCollapsed = !msg.toolCollapsed
 
-    const newLen = renderMessage(msg, contentWidth).length;
-    const lineDelta = newLen - oldLen;
-    const totalAfter = total + lineDelta;
-    const msgStart = msgStartMap.get(msg) ?? 0;
+    const newLen = renderMessage(msg, contentWidth).length
+    const lineDelta = newLen - oldLen
+    const totalAfter = total + lineDelta
+    const msgStart = msgStartMap.get(msg) ?? 0
 
     if (wasCollapsed) {
-      let idealOffset = Math.max(0, totalAfter - msgStart - height);
-      if (idealOffset > 0) idealOffset += 1;
-      this.scrollOffset = Math.min(idealOffset, Math.max(0, totalAfter - height));
-      this.stickyBottom = this.scrollOffset === 0;
+      let idealOffset = Math.max(0, totalAfter - msgStart - height)
+      if (idealOffset > 0) idealOffset += 1
+      this.scrollOffset = Math.min(idealOffset, Math.max(0, totalAfter - height))
+      this.stickyBottom = this.scrollOffset === 0
     } else {
-      const newScrollOffset = Math.max(0, this.scrollOffset + lineDelta);
-      this.scrollOffset = newScrollOffset;
-      this.stickyBottom = newScrollOffset === 0;
+      const newScrollOffset = Math.max(0, this.scrollOffset + lineDelta)
+      this.scrollOffset = newScrollOffset
+      this.stickyBottom = newScrollOffset === 0
     }
 
-    return true;
+    return true
   }
 
   /**
@@ -377,9 +468,10 @@ export class MessageList implements Component {
       this.screenYToAllLineIdx(event.y, total, height),
     ));
 
-    this.lastDragScreenY = event.y;
-    this.selCurrentIdx   = idx;
-    this.selFinalized    = false;
+    this.lastDragScreenY = event.y
+    this.selCurrentIdx   = idx
+    this.selCurrentX     = Math.max(0, event.x - 1)  // converter 1-based → 0-based
+    this.selFinalized    = false
 
     if (!this.isDragging) {
       this.isDragging = true;
@@ -389,15 +481,10 @@ export class MessageList implements Component {
   }
 
   clear(): void {
-    this.messages     = [];
-    this.scrollOffset = 0;
-    this.stickyBottom = true;
-    // Limpar todo o estado de seleção
-    this.selAnchorIdx    = -1;
-    this.selCurrentIdx   = -1;
-    this.selFinalized    = false;
-    this.isDragging      = false;
-    this.lastDragScreenY = -1;
+    this.messages     = []
+    this.scrollOffset = 0
+    this.stickyBottom = true
+    this.clearSelectionState()
   }
 
   /**
@@ -439,15 +526,24 @@ export class MessageList implements Component {
 
     const isScrollable = allLines.length > height;
 
-    // Calcular range de seleção — agora usa índices diretos (sem conversão)
-    let selStart = -1;
-    let selEnd   = -1;
+    // Normalizar seleção: garantir selFrom < selTo em allLines-index space
+    let selFromIdx = -1, selFromX = 0, selToIdx = -1, selToX = 0
     if ((this.isDragging || this.selFinalized) && this.selAnchorIdx >= 0 && this.selCurrentIdx >= 0) {
-      selStart = Math.min(this.selAnchorIdx, this.selCurrentIdx);
-      selEnd   = Math.max(this.selAnchorIdx, this.selCurrentIdx);
+      const anchorFirst =
+        this.selAnchorIdx < this.selCurrentIdx ||
+        (this.selAnchorIdx === this.selCurrentIdx && this.selAnchorX <= this.selCurrentX)
+
+      if (anchorFirst) {
+        selFromIdx = this.selAnchorIdx;  selFromX = this.selAnchorX
+        selToIdx   = this.selCurrentIdx; selToX   = this.selCurrentX
+      } else {
+        selFromIdx = this.selCurrentIdx; selFromX = this.selCurrentX
+        selToIdx   = this.selAnchorIdx;  selToX   = this.selAnchorX
+      }
+
       // Clamp ao range válido
-      selStart = Math.max(0, selStart);
-      selEnd   = Math.min(allLines.length - 1, selEnd);
+      selFromIdx = Math.max(0,                   selFromIdx)
+      selToIdx   = Math.min(allLines.length - 1, selToIdx)
     }
 
     // === Caso: conteúdo cabe na viewport (sem scrollbar) ===
@@ -455,7 +551,9 @@ export class MessageList implements Component {
       const padding = height - allLines.length;
       return [
         ...Array<string>(padding).fill(''),
-        ...allLines.map((l, i) => padEndAnsi(this.applySelHL(l, i, selStart, selEnd), width)),
+        ...allLines.map((l, i) => padEndAnsi(
+          this.applySelHL(l, i, selFromIdx, selFromX, selToIdx, selToX), width,
+        )),
       ];
     }
 
@@ -485,7 +583,7 @@ export class MessageList implements Component {
       const allLineIdx = start + i;
       // Não aplicar highlight à linha de hint (scrollOffset > 0, i === 0 substitui conteúdo)
       const isHint = this.scrollOffset > 0 && i === 0;
-      const hl = isHint ? line : this.applySelHL(line, allLineIdx, selStart, selEnd);
+      const hl = isHint ? line : this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX)
       return padEndAnsi(hl, contentWidth) + scrollbar[i];
     });
   }
