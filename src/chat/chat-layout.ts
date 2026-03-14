@@ -72,6 +72,11 @@ export class ChatLayout implements Component {
   handleKey(event: KeyEvent): boolean {
     const { key } = event;
 
+    // === Bloquear Enter enquanto seleção de texto ativa (evitar envio acidental) ===
+    if (key === 'return' && this.messageList.isSelectionActive()) {
+      return true   // consume: não enviar ao InputBar
+    }
+
     // === Scroll de mensagens ===
     if (key === 'pageup' || key === 'pagedown' || key === 'scroll-up' || key === 'scroll-down') {
       // Throttle apenas para eventos de mouse (não teclado)

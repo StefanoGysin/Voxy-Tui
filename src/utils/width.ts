@@ -16,3 +16,43 @@ export function padEndAnsi(line: string, targetWidth: number): string {
   const padding = Math.max(0, targetWidth - visual);
   return line + ' '.repeat(padding);
 }
+
+/**
+ * Retorna o índice (JS string index, 0-based) em `line` correspondendo à coluna
+ * visual `col` (0-based).
+ *
+ * Sequências ANSI têm largura visual zero e são puladas.
+ * Caracteres wide (CJK, emoji) são tratados corretamente via measureWidth.
+ * Surrogate pairs são tratados corretamente via codePointAt.
+ *
+ * Se `col` exceder a largura visual total da linha, retorna `line.length`.
+ */
+export function byteIndexAtVisualCol(line: string, col: number): number {
+  // Regex sticky: testa apenas na posição lastIndex (sem varrer a string toda)
+  const ansiRe = /\x1b\[[0-9;]*[mGKHFJABCDsuhl?]|\x1b[78]/y
+  let i    = 0
+  let vcol = 0
+
+  while (i < line.length && vcol < col) {
+    // Verificar se começa uma sequência ANSI na posição i
+    ansiRe.lastIndex = i
+    const m = ansiRe.exec(line)
+    if (m !== null) {
+      // Sequência ANSI: 0 colunas visuais → pular
+      i += m[0].length
+      continue
+    }
+
+    // Caractere imprimível — tratar surrogate pairs (emoji, etc.)
+    const cp    = line.codePointAt(i)!
+    const cpLen = cp > 0xFFFF ? 2 : 1          // surrogates ocupam 2 code units
+    const w     = measureWidth(String.fromCodePoint(cp))
+
+    if (vcol + w > col) break   // este char cruzaria a coluna alvo → parar antes dele
+
+    vcol += w
+    i    += cpLen
+  }
+
+  return i
+}
