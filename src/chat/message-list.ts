@@ -16,8 +16,9 @@ const TOOL_COLLAPSED_OUTPUT_LINES = 3;
 const SEL_HL  = '\x1b[44m';  // blue background (standard, todos os terminais)
 const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/etc.)
 
-const SCROLLBAR_THUMB = '█';
-const SCROLLBAR_TRACK = '░';
+const SCROLLBAR_THUMB = '▌';   // U+258C LEFT HALF BLOCK — thumb visível mas fino
+const SCROLLBAR_TRACK = '╎';   // U+254E LIGHT DOUBLE DASH VERTICAL — track muito sutil
+const MARGIN_LEFT = 2;  // espaço de respiração à esquerda do conteúdo
 const SCROLLBAR_PAGE_LINES = 10;  // linhas por click no track do scrollbar
 
 function renderToolMessage(msg: ChatMessage, width: number): string[] {
@@ -68,7 +69,7 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
     }
   }
 
-  lines.push('');
+  lines.push(`${FG_GRAY}${DIM}${'─'.repeat(width)}${RESET}`);
   return lines;
 }
 
@@ -91,7 +92,8 @@ function renderMessage(msg: ChatMessage, width: number): string[] {
   }
 
   const contentLines = wrapText(msg.content, width);
-  return [header, ...contentLines, ''];
+  const separator = `${FG_GRAY}${DIM}${'─'.repeat(width)}${RESET}`;
+  return [header, ...contentLines, separator];
 }
 
 export class MessageList implements Component {
@@ -254,10 +256,10 @@ export class MessageList implements Component {
       return
     }
 
-    const contentWidth = width - 2  // 1 gap + 1 scrollbar
+    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
     const allLines: string[] = []
     for (const msg of this.messages) {
-      allLines.push(...renderMessage(msg, contentWidth))
+      allLines.push(...renderMessage(msg, textWidth))
     }
     const total = allLines.length
 
@@ -371,6 +373,12 @@ export class MessageList implements Component {
    * - RIGHT RELEASE com seleção ativa: copia texto + limpa seleção.
    */
   handleMouse(event: MouseClickEvent): boolean {
+    // Limpar scrollbar drag em qualquer release (usuário pode soltar fora da coluna)
+    if (event.isRelease && this.isScrollbarDrag) {
+      this.isScrollbarDrag = false
+      return true
+    }
+
     // === SCROLLBAR COLUMN — interceptar ANTES de tudo ===
     if (this.isScrollable && event.x === this.lastRenderWidth) {
       if (!event.isRelease) {
@@ -420,7 +428,7 @@ export class MessageList implements Component {
       if (total > 0 && height > 0) {
         const idx = this.screenYToAllLineIdx(event.y, total, height)
         this.selAnchorIdx = Math.max(0, Math.min(total - 1, idx))
-        this.selAnchorX   = Math.max(0, event.x - 1)  // converter 1-based → 0-based
+        this.selAnchorX   = Math.max(0, event.x - 1 - MARGIN_LEFT)  // converter 1-based → 0-based, descontar margem
       }
       return false   // press não consome
     }
@@ -440,14 +448,14 @@ export class MessageList implements Component {
     const height = this.lastRenderHeight
     if (height <= 0 || width <= 0) return false
 
-    const contentWidth = width - 2  // 1 gap + 1 scrollbar
+    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
 
     // Construir mapeamento linha → mensagem
     const lineToMsg: (ChatMessage | null)[] = []
     const msgStartMap = new Map<ChatMessage, number>()
     for (const msg of this.messages) {
       msgStartMap.set(msg, lineToMsg.length)
-      const msgLines = renderMessage(msg, contentWidth)
+      const msgLines = renderMessage(msg, textWidth)
       for (let i = 0; i < msgLines.length; i++) {
         lineToMsg.push(msg)
       }
@@ -462,11 +470,11 @@ export class MessageList implements Component {
     if ((msg.toolOutput?.length ?? 0) <= TOOL_COLLAPSED_OUTPUT_LINES) return false
 
     const wasCollapsed = msg.toolCollapsed !== false
-    const oldLen = renderMessage(msg, contentWidth).length
+    const oldLen = renderMessage(msg, textWidth).length
 
     msg.toolCollapsed = !msg.toolCollapsed
 
-    const newLen = renderMessage(msg, contentWidth).length
+    const newLen = renderMessage(msg, textWidth).length
     const lineDelta = newLen - oldLen
     const totalAfter = total + lineDelta
     const msgStart = msgStartMap.get(msg) ?? 0
@@ -526,7 +534,7 @@ export class MessageList implements Component {
 
     this.lastDragScreenY = event.y
     this.selCurrentIdx   = idx
-    this.selCurrentX     = Math.max(0, event.x - 1)  // converter 1-based → 0-based
+    this.selCurrentX     = Math.max(0, event.x - 1 - MARGIN_LEFT)  // converter 1-based → 0-based, descontar margem
     this.selFinalized    = false
 
     if (!this.isDragging) {
@@ -559,9 +567,9 @@ export class MessageList implements Component {
     const bar: string[] = [];
     for (let i = 0; i < height; i++) {
       if (i >= thumbPos && i < thumbPos + thumbSize) {
-        bar.push(`${FG_GRAY}${SCROLLBAR_THUMB}${RESET}`);
+        bar.push(`\x1b[38;5;102m${SCROLLBAR_THUMB}${RESET}`);
       } else {
-        bar.push(`${FG_GRAY}${DIM}${SCROLLBAR_TRACK}${RESET}`);
+        bar.push(`\x1b[38;5;238m${SCROLLBAR_TRACK}${RESET}`);
       }
     }
     return bar;
@@ -573,12 +581,12 @@ export class MessageList implements Component {
     this.lastRenderWidth = width;
     this.lastRenderHeight = height;
 
-    const contentWidth = width - 2  // 1 gap + 1 scrollbar;
+    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
 
-    // Renderizar todas as mensagens com contentWidth
+    // Renderizar todas as mensagens com textWidth
     const allLines: string[] = [];
     for (const msg of this.messages) {
-      allLines.push(...renderMessage(msg, contentWidth));
+      allLines.push(...renderMessage(msg, textWidth));
     }
     // Cachear count para uso em updateSelOnScroll() (scroll durante drag)
     this.lastAllLinesCount = allLines.length;
@@ -609,11 +617,13 @@ export class MessageList implements Component {
     // === Caso: conteúdo cabe na viewport (sem scrollbar) ===
     if (!isScrollable) {
       const padding = height - allLines.length;
+      const marginStr = ' '.repeat(MARGIN_LEFT)
       return [
         ...Array<string>(padding).fill(''),
-        ...allLines.map((l, i) => padEndAnsi(
-          this.applySelHL(l, i, selFromIdx, selFromX, selToIdx, selToX), width,
-        )),
+        ...allLines.map((l, i) => {
+          const hl = this.applySelHL(l, i, selFromIdx, selFromX, selToIdx, selToX)
+          return padEndAnsi(marginStr + hl, width)
+        }),
       ];
     }
 
@@ -638,13 +648,14 @@ export class MessageList implements Component {
     // Gerar scrollbar
     const scrollbar = this.renderScrollbar(height, allLines.length, maxOffset);
 
-    // Combinar: conteúdo (padded ao contentWidth) + 1 char de scrollbar
+    // Combinar: margem + conteúdo (padded ao textWidth) + gap + scrollbar
+    const marginStr = ' '.repeat(MARGIN_LEFT)
     return sliced.map((line, i) => {
       const allLineIdx = start + i;
       // Não aplicar highlight à linha de hint (scrollOffset > 0, i === 0 substitui conteúdo)
       const isHint = this.scrollOffset > 0 && i === 0;
       const hl = isHint ? line : this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX)
-      return padEndAnsi(hl, contentWidth) + ' ' + scrollbar[i];
+      return marginStr + padEndAnsi(hl, textWidth) + ' ' + scrollbar[i];
     });
   }
 }
