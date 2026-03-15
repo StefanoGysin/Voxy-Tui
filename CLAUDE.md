@@ -108,6 +108,7 @@ input.onChange?: (text: string) => void
 // render(width, height) retorna EXATAMENTE height linhas:
 // — padding de linhas vazias no topo se conteúdo < height
 // — slice se conteúdo > height (com scrollOffset)
+// — textWidth = width - MARGIN_LEFT (sem scrollbar — buffer primário)
 // ChatLayout distribui: messagesHeight + inputHeight + statusHeight = height
 ```
 
@@ -204,6 +205,7 @@ padEndAnsi(line: string, targetWidth: number): string
 | **10 — Bugfixes + Scrollable** | `feat/session-10-fixes` | ✅ merged | 190 |
 | **30 — EAW Dashes Fix** | `feat/session-30-eaw-dashes` | ✅ merged | 190 |
 | **31 — Buffer Primário** | `feat/session-31-buffer-primario` | ✅ merged | 333 |
+| **32 — Remove Scrollbar** | `feat/session-32-remove-scrollbar` | ✅ merged | 320 |
 | 11 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado
