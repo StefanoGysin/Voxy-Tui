@@ -266,6 +266,21 @@ describe('MessageList — scrollbar', () => {
     // Após scroll para cima, thumb deve estar mais alto (índice menor)
     expect(thumbUp).toBeLessThan(thumbBottom);
   });
+
+  test('com overflow: penúltima coluna é separador │ em todas as linhas', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 30; i++) {
+      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+    const lines = list.render(40, 10);
+    expect(lines).toHaveLength(10);
+    for (const line of lines) {
+      const chars = [...stripAnsi(line)];
+      // penúltima coluna deve ser │ (separador do scrollbar)
+      const secondToLast = chars.at(-2) ?? '';
+      expect(secondToLast).toBe('│');
+    }
+  });
 });
 
 describe('MessageList — handleMouse', () => {
