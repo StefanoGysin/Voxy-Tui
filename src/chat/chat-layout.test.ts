@@ -120,60 +120,6 @@ describe('ChatLayout — activityLog', () => {
   });
 });
 
-describe('ChatLayout — scroll', () => {
-  let layout: ChatLayout;
-
-  beforeEach(() => {
-    jest.useFakeTimers();
-    layout = new ChatLayout();
-    for (let i = 0; i < 30; i++) {
-      layout.messageList.addMessage({
-        id: `${i}`, role: 'user', content: `Mensagem ${i}`,
-        timestamp: new Date(),
-      });
-    }
-  });
-
-  afterEach(() => {
-    layout.statusBar.dispose();
-    jest.useRealTimers();
-  });
-
-  test('pageup move scroll para cima', () => {
-    const before = layout.messageList.getScrollOffset();
-    layout.handleKey({ key: 'pageup', ctrl: false, meta: false, shift: false, raw: '' });
-    expect(layout.messageList.getScrollOffset()).toBeGreaterThan(before);
-  });
-
-  test('pagedown após pageup desce scroll', () => {
-    layout.handleKey({ key: 'pageup', ctrl: false, meta: false, shift: false, raw: '' });
-    const after_up = layout.messageList.getScrollOffset();
-    layout.handleKey({ key: 'pagedown', ctrl: false, meta: false, shift: false, raw: '' });
-    expect(layout.messageList.getScrollOffset()).toBeLessThan(after_up);
-  });
-
-  test('scroll-up (mouse) move scroll', () => {
-    const before = layout.messageList.getScrollOffset();
-    layout.handleKey({ key: 'scroll-up', ctrl: false, meta: false, shift: false, raw: '' });
-    expect(layout.messageList.getScrollOffset()).toBeGreaterThan(before);
-  });
-
-  test('scroll-down (mouse) após scroll-up desce', () => {
-    layout.handleKey({ key: 'scroll-up', ctrl: false, meta: false, shift: false, raw: '' });
-    const after_up = layout.messageList.getScrollOffset();
-    jest.advanceTimersByTime(20); // passa o throttle
-    layout.handleKey({ key: 'scroll-down', ctrl: false, meta: false, shift: false, raw: '' });
-    expect(layout.messageList.getScrollOffset()).toBeLessThan(after_up);
-  });
-
-  test('throttle: dois scroll-up consecutivos ignoram o segundo', () => {
-    layout.handleKey({ key: 'scroll-up', ctrl: false, meta: false, shift: false, raw: '' });
-    const after_first = layout.messageList.getScrollOffset();
-    layout.handleKey({ key: 'scroll-up', ctrl: false, meta: false, shift: false, raw: '' });
-    expect(layout.messageList.getScrollOffset()).toBe(after_first);
-  });
-});
-
 describe('ChatLayout — handleMouse', () => {
   let layout: ChatLayout;
   afterEach(() => { layout?.statusBar.dispose(); });

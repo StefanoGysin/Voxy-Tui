@@ -85,6 +85,16 @@ describe('TUI', () => {
     expect(output).toContain('\x1b[24A');
   });
 
+  it('stop() emite ERASE_SCREEN + cursorTo(1,1) para evitar ghost text no próximo start()', () => {
+    const term = new MockTerminal();
+    tui = new TUI({ terminal: term });
+    tui.start();
+    term.reset();
+    tui.stop();
+    expect(term.getOutput()).toContain('\x1b[2J');    // ERASE_SCREEN
+    expect(term.getOutput()).toContain('\x1b[1;1H'); // cursorTo(1, 1)
+  });
+
   it('adicionar mensagem e re-render produz output diferente', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });

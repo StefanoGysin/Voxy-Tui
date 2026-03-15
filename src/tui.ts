@@ -2,7 +2,7 @@ import { ProcessTerminal, Renderer, RenderScheduler } from './core';
 import type { Terminal } from './core';
 import { CURSOR_HIDE, CURSOR_SHOW,
          ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING,
-         cursorUp } from './core/ansi';
+         ERASE_SCREEN, cursorTo, cursorUp } from './core/ansi';
 import { ChatLayout } from './chat/chat-layout';
 
 export interface TUIOptions {
@@ -59,8 +59,10 @@ export class TUI {
     this.scheduler.dispose();
     this.layout.statusBar.dispose();
 
-    // Desabilitar mouse tracking + restaurar cursor
-    this.terminal.write(DISABLE_MOUSE_TRACKING + CURSOR_SHOW + '\r\n');
+    // Limpar tela antes de restaurar terminal: evita que o frame atual da TUI
+    // seja empurrado para o scrollback pelo próximo start() com '\n'.repeat(rows).
+    // Desabilitar mouse tracking + restaurar cursor após limpeza.
+    this.terminal.write(ERASE_SCREEN + cursorTo(1, 1) + DISABLE_MOUSE_TRACKING + CURSOR_SHOW);
 
     if (this.resizeListener) {
       process.stdout.removeListener('resize', this.resizeListener);

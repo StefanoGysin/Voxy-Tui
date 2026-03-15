@@ -4,16 +4,11 @@ import { InputBar } from './input-bar';
 import { StatusBar } from './status-bar';
 import type { ToolActivityLog } from './tool-activity-log';
 
-const SCROLL_LINES = 3;   // mouse wheel: linhas por evento
-const PAGE_LINES   = 10;  // pageup/pagedown: linhas por evento
-const SCROLL_THROTTLE_MS = 16; // throttle de mouse scroll (~60fps)
-
 export class ChatLayout implements Component {
   readonly messageList: MessageList;
   readonly inputBar: InputBar;
   readonly statusBar: StatusBar;
   private activityLog: ToolActivityLog | null = null;
-  private lastScrollAt = 0;
   private lastMessagesHeight = 0;
 
   constructor() {
@@ -77,24 +72,9 @@ export class ChatLayout implements Component {
       return true   // consume: não enviar ao InputBar
     }
 
-    // === Scroll de mensagens ===
-    if (key === 'pageup' || key === 'pagedown' || key === 'scroll-up' || key === 'scroll-down') {
-      // Throttle apenas para eventos de mouse (não teclado)
-      if (key === 'scroll-up' || key === 'scroll-down') {
-        const now = Date.now();
-        if (now - this.lastScrollAt < SCROLL_THROTTLE_MS) return true;
-        this.lastScrollAt = now;
-      }
-
-      if (key === 'pageup' || key === 'scroll-up') {
-        this.messageList.scrollUp(key === 'pageup' ? PAGE_LINES : SCROLL_LINES);
-      } else {
-        this.messageList.scrollDown(key === 'pagedown' ? PAGE_LINES : SCROLL_LINES);
-      }
-      return true;
-    }
-
     // === Tudo o resto vai para o InputBar ===
+    // Nota: scroll (pageup/pagedown/scroll-up/scroll-down) é gerenciado nativamente
+    // pelo terminal no modelo de buffer primário. Não interceptar aqui.
     return this.inputBar.handleKey(event);
   }
 
