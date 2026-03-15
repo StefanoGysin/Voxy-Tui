@@ -2,7 +2,7 @@ import type { Component, MouseClickEvent, MouseDragEvent } from '../core/compone
 import type { ChatMessage } from './types';
 import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED, FG_YELLOW } from '../core/ansi';
 import { wrapText } from '../utils/wrap';
-import { padEndAnsi, byteIndexAtVisualCol } from '../utils/width';
+import { padEndAnsi, byteIndexAtVisualCol, measureWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 
 function formatTime(date: Date): string {
@@ -22,6 +22,7 @@ const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/
 const SCROLLBAR_SEP   = '\x1b[38;5;236m│\x1b[0m';                  // separador dim gray │ (mesma posição do antigo gap ' ')
 const SCROLLBAR_THUMB = '\x1b[48;5;240m\x1b[38;5;248m▐\x1b[0m';    // fundo médio + right-half block claro
 const SCROLLBAR_TRACK = '\x1b[48;5;234m\x1b[38;5;237m╎\x1b[0m';    // fundo escuro + dash dim
+const SCROLLBAR_HINT_BORDER = '\x1b[38;5;237m│\x1b[0m';  // │ neutro/dim para hint line
 const MARGIN_LEFT = 2;  // espaço de respiração à esquerda do conteúdo
 const SCROLLBAR_PAGE_LINES = 10;  // linhas por click no track do scrollbar
 
@@ -662,8 +663,11 @@ export class MessageList implements Component {
 
     // Indicador de scroll: substitui a primeira linha quando há conteúdo acima
     if (this.scrollOffset > 0) {
-      const hintText = `↑ ${this.scrollOffset} linhas acima · PgUp/PgDn · roda do mouse`;
-      sliced[0] = `${FG_GRAY}${DIM}${hintText}${RESET}`;
+      const prefix = `↑ ${this.scrollOffset} linhas acima `;
+      const prefixWidth = measureWidth(prefix);
+      const dashCount = Math.max(0, textWidth - prefixWidth);
+      const hintLine = `${FG_GRAY}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
+      sliced[0] = hintLine;
     }
 
     // Gerar scrollbar
@@ -674,7 +678,7 @@ export class MessageList implements Component {
       const allLineIdx = start + i;
       const isHint = this.scrollOffset > 0 && i === 0;
       const hl = isHint ? line : this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX)
-      const border = isHint ? ' ' : (allLineBorders[allLineIdx] ?? ' ')
+      const border = isHint ? SCROLLBAR_HINT_BORDER : (allLineBorders[allLineIdx] ?? ' ')
       return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i];
     });
   }
