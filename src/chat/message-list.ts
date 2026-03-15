@@ -256,7 +256,10 @@ export class MessageList implements Component {
     const clampedOffset = Math.min(this.scrollOffset, maxOffset);
     const end = total - clampedOffset;
     const start = end - height;
-    return start + (screenY - 1);
+    // Quando hint visível (scrolled), row 0 = hint (não é conteúdo).
+    // Conteúdo começa no row 1 → deslocar mapeamento em 1.
+    const hintOffset = clampedOffset > 0 ? 1 : 0;
+    return start + (screenY - 1) - hintOffset;
   }
 
   /**
@@ -659,26 +662,37 @@ export class MessageList implements Component {
 
     const end = allLines.length - this.scrollOffset;
     const start = end - height;
-    const sliced = allLines.slice(start, end);
 
-    // Indicador de scroll: substitui a primeira linha quando há conteúdo acima
+    // Gerar scrollbar (sempre com height linhas)
+    const scrollbar = this.renderScrollbar(height, allLines.length, maxOffset);
+
+    // Quando scrolled: hint em row 0 (dedicado), conteúdo em rows 1..height-1
+    // O hint NÃO substitui allLines[start] — preserva o header da mensagem no topo
     if (this.scrollOffset > 0) {
       const prefix = `▴ ${this.scrollOffset} linhas acima `;
       const prefixWidth = measureWidth(prefix);
       const dashCount = Math.max(0, textWidth - prefixWidth);
       const hintLine = `${FG_GRAY}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
-      sliced[0] = hintLine;
+      const hintRow = SCROLLBAR_HINT_BORDER + ' ' + padEndAnsi(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
+
+      // height-1 linhas de conteúdo: allLines[start .. start + height - 2]
+      const contentSlice = allLines.slice(start, start + height - 1);
+      const contentRows = contentSlice.map((line, i) => {
+        const allLineIdx = start + i;
+        const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
+        const border = allLineBorders[allLineIdx] ?? ' ';
+        return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i + 1];
+      });
+
+      return [hintRow, ...contentRows];
     }
 
-    // Gerar scrollbar
-    const scrollbar = this.renderScrollbar(height, allLines.length, maxOffset);
-
-    // Combinar: borda + espaço + conteúdo (padded ao textWidth) + gap + scrollbar
+    // Sem hint: height linhas de conteúdo normalmente
+    const sliced = allLines.slice(start, end);
     return sliced.map((line, i) => {
       const allLineIdx = start + i;
-      const isHint = this.scrollOffset > 0 && i === 0;
-      const hl = isHint ? line : this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX)
-      const border = isHint ? SCROLLBAR_HINT_BORDER : (allLineBorders[allLineIdx] ?? ' ')
+      const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
+      const border = allLineBorders[allLineIdx] ?? ' ';
       return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i];
     });
   }

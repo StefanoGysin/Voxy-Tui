@@ -763,6 +763,33 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     // Scrollbar │ ainda deve estar presente
     const chars = [...hintStripped];
     expect(chars.at(-2)).toBe('│');   // SCROLLBAR_SEP penúltima coluna
+
+    // lines[1] deve ser o header da mensagem (NÃO substituído pelo hint)
+    const line1Stripped = stripAnsi(lines[1]);
+    expect(line1Stripped[0]).toBe('│');   // borda colorida da mensagem
+    expect(line1Stripped).toContain('You');  // header do user está presente
+  });
+
+  test('hint line: não substitui o header da mensagem no topo do viewport', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 30; i++) {
+      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    }
+    list.render(40, 10);
+    list.scrollUp(3);
+    const lines = list.render(40, 10);
+
+    // Row 0 = hint
+    expect(stripAnsi(lines[0])).toContain('▴');
+    expect(stripAnsi(lines[0])).toContain('linhas acima');
+
+    // Row 1 = primeiro conteúdo real — deve ser header OU content, nunca "▴ N linhas acima"
+    const line1 = stripAnsi(lines[1]);
+    expect(line1).not.toContain('▴');
+    expect(line1).not.toContain('linhas acima');
+
+    // Deve ter exatamente height linhas no total
+    expect(lines).toHaveLength(10);
   });
 
   test('separador ─ entre mensagens', () => {
