@@ -51,6 +51,35 @@ describe('Renderer', () => {
     expect(term.getOutput()).toContain('linha 1');
   });
 
+  test('invalidate() emite ERASE_SCREEN + cursorTo(1,1) para evitar ghost text', () => {
+    const term = new MockTerminal();
+    const renderer = new Renderer(term);
+    renderer.invalidate();
+    const output = term.getOutput();
+    expect(output).toContain('\x1b[2J');    // ERASE_SCREEN
+    expect(output).toContain('\x1b[1;1H'); // cursorTo(1, 1)
+  });
+
+  test('invalidate() força first render path na próxima chamada', () => {
+    const term = new MockTerminal();
+    const renderer = new Renderer(term);
+
+    // Primeiro render
+    const comp = makeComponent(['linha A']);
+    renderer.render([comp]);
+    term.reset();
+
+    // Segundo render — sem mudança — não escreve nada
+    renderer.render([comp]);
+    expect(term.getOutput()).toBe('');
+
+    // invalidate() + render — deve escrever novamente (full redraw)
+    renderer.invalidate();
+    term.reset();
+    renderer.render([comp]);
+    expect(term.getOutput()).not.toBe('');
+  });
+
   test('synchronized output envolve cada render', () => {
     const term = new MockTerminal();
     const renderer = new Renderer(term);

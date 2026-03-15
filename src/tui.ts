@@ -1,7 +1,8 @@
 import { ProcessTerminal, Renderer, RenderScheduler } from './core';
 import type { Terminal } from './core';
 import { CURSOR_HIDE, CURSOR_SHOW,
-         ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING } from './core/ansi';
+         ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING,
+         cursorUp } from './core/ansi';
 import { ChatLayout } from './chat/chat-layout';
 
 export interface TUIOptions {
@@ -31,8 +32,16 @@ export class TUI {
     if (this.running) return;
     this.running = true;
 
+    const { rows } = this.terminal.getSize();
+
     // Buffer primário: esconde cursor + mouse tracking
-    this.terminal.write('\r\n' + CURSOR_HIDE + ENABLE_MOUSE_TRACKING);
+    // Space reservation: '\n' × rows empurra conteúdo antigo para o scrollback limpamente,
+    // cursorUp(rows) volta ao topo da área reservada (row 1 known-good).
+    // Garante que cursorUp(N) do renderer funcione corretamente desde o primeiro frame.
+    this.terminal.write(
+      '\r\n' + CURSOR_HIDE + ENABLE_MOUSE_TRACKING +
+      '\n'.repeat(rows) + cursorUp(rows)
+    );
 
     this.resizeListener = () => {
       this.renderer.invalidate();

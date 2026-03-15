@@ -74,6 +74,17 @@ describe('TUI', () => {
     expect(term.getOutput()).toContain('\x1b[?1002l');
   });
 
+  it('start() reserva espaço: emite \\n × rows + cursorUp(rows) antes do primeiro render', () => {
+    const term = new MockTerminal(80, 24);
+    tui = new TUI({ terminal: term });
+    tui.start();
+    const output = term.getOutput();
+    // 24 newlines consecutivos = reserva de espaço (rows = 24)
+    expect(output).toContain('\n'.repeat(24));
+    // cursorUp(24) para voltar ao topo da área reservada
+    expect(output).toContain('\x1b[24A');
+  });
+
   it('adicionar mensagem e re-render produz output diferente', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });
