@@ -1,6 +1,6 @@
 import type { Component } from './component';
 import type { Terminal } from './terminal';
-import { SYNC_START, SYNC_END, ERASE_DOWN, RESET, cursorUp } from './ansi';
+import { SYNC_START, SYNC_END, ERASE_DOWN, ERASE_SCREEN, RESET, cursorUp, cursorTo } from './ansi';
 
 export class Renderer {
   private previousLines: string[] = [];
@@ -62,8 +62,14 @@ export class Renderer {
 
   /**
    * Força full redraw no próximo render (usar após resize).
+   * Emite ERASE_SCREEN + cursorTo(1,1) para limpar a tela visível antes do re-render,
+   * evitando que frames anteriores da TUI sejam empurrados para o scrollback.
    */
   invalidate(): void {
+    // Limpar tela + cursor home antes do re-render.
+    // Sem isso, o first-render path escreveria H linhas da posição atual do cursor
+    // (meio do frame antigo), causando scrolls que levam partes da TUI ao scrollback.
+    this.terminal.write(ERASE_SCREEN + cursorTo(1, 1));
     this.previousLines = [];
     this.isFirstRender = true;
   }
