@@ -16,8 +16,12 @@ const TOOL_COLLAPSED_OUTPUT_LINES = 3;
 const SEL_HL  = '\x1b[44m';  // blue background (standard, todos os terminais)
 const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/etc.)
 
-const SCROLLBAR_THUMB = '▐';   // U+2590 RIGHT HALF BLOCK — preenche lado direito da célula
-const SCROLLBAR_TRACK = '╎';   // U+254E LIGHT DOUBLE DASH VERTICAL — track muito sutil
+// Scrollbar — separador + background color
+// O separador (│ dim) cria a "caixa separada" visualmente
+// Background colors: thumb tem fundo médio, track tem fundo escuro
+const SCROLLBAR_SEP   = '\x1b[38;5;236m│\x1b[0m';                  // separador dim gray │ (mesma posição do antigo gap ' ')
+const SCROLLBAR_THUMB = '\x1b[48;5;240m\x1b[38;5;248m▐\x1b[0m';    // fundo médio + right-half block claro
+const SCROLLBAR_TRACK = '\x1b[48;5;234m\x1b[38;5;237m╎\x1b[0m';    // fundo escuro + dash dim
 const MARGIN_LEFT = 2;  // espaço de respiração à esquerda do conteúdo
 const SCROLLBAR_PAGE_LINES = 10;  // linhas por click no track do scrollbar
 
@@ -671,7 +675,7 @@ export class MessageList implements Component {
       const isHint = this.scrollOffset > 0 && i === 0;
       const hl = isHint ? line : this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX)
       const border = isHint ? ' ' : (allLineBorders[allLineIdx] ?? ' ')
-      return border + ' ' + padEndAnsi(hl, textWidth) + ' ' + scrollbar[i];
+      return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i];
     });
   }
 }
