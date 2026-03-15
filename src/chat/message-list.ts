@@ -671,7 +671,8 @@ export class MessageList implements Component {
     if (this.scrollOffset > 0) {
       const prefix = `▴ ${this.scrollOffset} linhas acima `;
       const prefixWidth = measureWidth(prefix);
-      const dashCount = Math.max(0, textWidth - prefixWidth);
+      // -1: garante 1 espaço antes do SCROLLBAR_SEP para evitar conexão visual ─│
+      const dashCount = Math.max(0, textWidth - prefixWidth - 1);
       const hintLine = `${FG_GRAY}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
       const hintRow = SCROLLBAR_HINT_BORDER + ' ' + padEndAnsi(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
 
