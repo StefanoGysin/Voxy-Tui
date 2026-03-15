@@ -184,12 +184,14 @@ describe('MessageList — scroll indicator', () => {
     expect(stripAnsi(lines[0])).not.toContain('linhas acima');
   });
 
-  test('com scroll: primeira linha É o indicador', () => {
+  test('com scroll: linhas de conteúdo — sem hint visual (buffer primário)', () => {
     const list = new MessageList();
     makeMany(list, 20);
     list.scrollUp(5);
     const lines = list.render(80, 10);
-    expect(stripAnsi(lines[0])).toContain('linhas acima');
+    // Sem hint line no buffer primário — o terminal gerencia scrollback
+    expect(stripAnsi(lines[0])).not.toContain('linhas acima');
+    expect(lines).toHaveLength(10);
   });
 
   test('getScrollOffset() retorna 0 inicialmente', () => {
@@ -202,84 +204,6 @@ describe('MessageList — scroll indicator', () => {
     makeMany(list, 20);
     list.scrollUp(5);
     expect(list.getScrollOffset()).toBe(5);
-  });
-});
-
-describe('MessageList — scrollbar', () => {
-  function makeMany(list: MessageList, n: number): void {
-    for (let i = 0; i < n; i++) {
-      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
-    }
-  }
-
-  test('sem overflow: sem scrollbar (última coluna não é ▐ nem ╎)', () => {
-    const list = new MessageList();
-    list.addMessage({ id: '1', role: 'user', content: 'curto', timestamp: new Date() });
-    const lines = list.render(20, 10);
-    const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
-    for (const line of contentLines) {
-      const stripped = stripAnsi(line);
-      const last = [...stripped].at(-1) ?? '';
-      expect(last).not.toBe('▐');
-      expect(last).not.toBe('╎');
-    }
-  });
-
-  test('com overflow: todas as linhas têm scrollbar (▐ ou ╎) na última coluna', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const lines = list.render(40, 10);
-    expect(lines).toHaveLength(10);
-    for (const line of lines) {
-      const stripped = stripAnsi(line);
-      const last = [...stripped].at(-1) ?? '';
-      expect(['▐', '╎']).toContain(last);
-    }
-  });
-
-  test('com overflow: thumb (▐) aparece na parte inferior quando scrollOffset=0', () => {
-    const list = new MessageList(); // scrollOffset=0 = fundo (sticky)
-    makeMany(list, 30);
-    const lines = list.render(40, 10);
-    const scrollChars = lines.map(l => [...stripAnsi(l)].at(-1) ?? '');
-    // Alguma linha inferior deve ser thumb
-    const thumbLines = scrollChars.map((c, i) => ({ c, i })).filter(x => x.c === '▐');
-    expect(thumbLines.length).toBeGreaterThan(0);
-    // O thumb deve estar na parte inferior da viewport (último terço)
-    const avgThumbPos = thumbLines.reduce((a, b) => a + b.i, 0) / thumbLines.length;
-    expect(avgThumbPos).toBeGreaterThan(5); // > metade de 10
-  });
-
-  test('com overflow: thumb sobe quando scrollUp()', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-
-    const linesBottom = list.render(40, 10);
-    const thumbBottom = linesBottom.reduce((acc, l, i) =>
-      [...stripAnsi(l)].at(-1) === '▐' ? i : acc, -1);
-
-    list.scrollUp(10);
-    const linesUp = list.render(40, 10);
-    const thumbUp = linesUp.reduce((acc, l, i) =>
-      [...stripAnsi(l)].at(-1) === '▐' ? i : acc, -1);
-
-    // Após scroll para cima, thumb deve estar mais alto (índice menor)
-    expect(thumbUp).toBeLessThan(thumbBottom);
-  });
-
-  test('com overflow: penúltima coluna é separador │ em todas as linhas', () => {
-    const list = new MessageList();
-    for (let i = 0; i < 30; i++) {
-      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
-    }
-    const lines = list.render(40, 10);
-    expect(lines).toHaveLength(10);
-    for (const line of lines) {
-      const chars = [...stripAnsi(line)];
-      // penúltima coluna deve ser │ (separador do scrollbar)
-      const secondToLast = chars.at(-2) ?? '';
-      expect(secondToLast).toBe('│');
-    }
   });
 });
 
@@ -542,157 +466,6 @@ describe('MessageList — drag selection', () => {
   });
 });
 
-describe('MessageList — scrollbar mouse interaction', () => {
-  function makeMany(list: MessageList, n: number): void {
-    for (let i = 0; i < n; i++) {
-      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
-    }
-  }
-
-  test('click no track acima do thumb → scroll up', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const width = 40, height = 10;
-    list.render(width, height);
-    // scrollOffset=0 (fundo), thumb está na parte inferior
-    expect(list.getScrollOffset()).toBe(0);
-
-    // Click no track acima do thumb (y=1, x=width = coluna do scrollbar)
-    list.handleMouse({ x: width, y: 1, button: 0, isRelease: false });
-    expect(list.getScrollOffset()).toBeGreaterThan(0);
-  });
-
-  test('click no track abaixo do thumb → scroll down', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const width = 40, height = 10;
-    // Scrollar para cima (offset máximo)
-    list.render(width, height);
-    list.scrollUp(100);
-    list.render(width, height);
-    const maxOffset = list.getScrollOffset();
-    expect(maxOffset).toBeGreaterThan(0);
-
-    // Click no track abaixo do thumb (y=height, x=width = coluna do scrollbar)
-    list.handleMouse({ x: width, y: height, button: 0, isRelease: false });
-    expect(list.getScrollOffset()).toBeLessThan(maxOffset);
-  });
-
-  test('click no thumb → inicia drag sem alterar scrollOffset', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const width = 40, height = 10;
-    list.render(width, height);
-    const offsetBefore = list.getScrollOffset();
-
-    // Thumb está na parte inferior quando scrollOffset=0
-    // Encontrar uma posição do thumb: última linha é provável
-    // Após render, o thumb position é armazenado internamente
-    // Clicar no thumb (posição inferior da viewport)
-    const thumbY = height; // thumb está no fundo quando offset=0
-    list.handleMouse({ x: width, y: thumbY, button: 0, isRelease: false });
-
-    // O offset pode mudar se clicamos no track, não no thumb
-    // Para testar que drag funciona, fazemos um drag subsequente
-    const dragConsumed = list.handleMouseDrag({ x: width, y: 1, button: 0 });
-    // Se drag foi consumido, o scrollbar drag está ativo
-    expect(dragConsumed).toBe(true);
-  });
-
-  test('drag do thumb → atualiza scrollOffset proporcionalmente', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const width = 40, height = 10;
-    list.render(width, height);
-
-    // Scrollar para cima para ter o thumb no meio
-    list.scrollUp(30);
-    list.render(width, height);
-
-    // Clicar no thumb (precisa encontrar a posição real do thumb)
-    // Acessar estado interno para o teste
-    const thumbPos = (list as any).lastScrollbarThumbPos as number;
-    const thumbY = thumbPos + 1; // converter 0-based para 1-based
-
-    list.handleMouse({ x: width, y: thumbY, button: 0, isRelease: false });
-
-    // Drag para o fundo da viewport (thumb no fundo = scrollOffset ≈ 0)
-    list.handleMouseDrag({ x: width, y: height, button: 0 });
-
-    // scrollOffset deve estar próximo de 0 (fundo)
-    expect(list.getScrollOffset()).toBeLessThanOrEqual(2);
-  });
-
-  test('click no scrollbar NÃO limpa seleção ativa', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const width = 40, height = 10;
-    list.render(width, height);
-
-    // Criar uma seleção: press → drag → release
-    list.handleMouse({ x: 5, y: 5, button: 0, isRelease: false });
-    list.handleMouseDrag({ x: 10, y: 7, button: 0 });
-    list.handleMouse({ x: 10, y: 7, button: 0, isRelease: true });
-    expect(list.isSelectionActive()).toBe(true);
-
-    // Click no scrollbar track
-    list.handleMouse({ x: width, y: 1, button: 0, isRelease: false });
-
-    // Seleção deve permanecer ativa
-    expect(list.isSelectionActive()).toBe(true);
-  });
-
-  test('margens: linha scrollável tem width total correto', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const width = 20, height = 5;
-    const lines = list.render(width, height);
-    expect(lines).toHaveLength(height);
-
-    // Cada linha deve ter visual width = 20 (margin 2 + conteúdo 16 + gap 1 + scrollbar 1 = 20)
-    for (const line of lines) {
-      const stripped = stripAnsi(line);
-      // measureWidth would be ideal but stripAnsi + length works for ASCII
-      expect(stripped.length).toBe(width);
-    }
-  });
-});
-
-describe('MessageList — bugfix: isScrollbarDrag release fora do scrollbar', () => {
-  function makeMany(list: MessageList, n: number): void {
-    for (let i = 0; i < n; i++) {
-      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
-    }
-  }
-
-  test('release fora da coluna do scrollbar limpa isScrollbarDrag', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const width = 40, height = 10;
-    list.render(width, height);
-
-    // Scrollar para cima para ter o thumb no meio
-    list.scrollUp(30);
-    list.render(width, height);
-
-    // Clicar no thumb para iniciar scrollbar drag
-    const thumbPos = (list as any).lastScrollbarThumbPos as number;
-    const thumbY = thumbPos + 1; // 0-based → 1-based
-    list.handleMouse({ x: width, y: thumbY, button: 0, isRelease: false });
-    expect((list as any).isScrollbarDrag).toBe(true);
-
-    // Release FORA da coluna do scrollbar (x=5 ≠ width)
-    list.handleMouse({ x: 5, y: 3, button: 0, isRelease: true });
-    expect((list as any).isScrollbarDrag).toBe(false);
-
-    // Agora um drag normal (seleção de texto) NÃO deve scrollar
-    list.handleMouse({ x: 5, y: 5, button: 0, isRelease: false });
-    list.handleMouseDrag({ x: 10, y: 7, button: 0 });
-    // Deve ter seleção ativa, não scroll
-    expect(list.isSelectionActive()).toBe(true);
-  });
-});
-
 describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
   test('render inclui margem: cada linha de conteúdo começa com │ + espaço', () => {
     const list = new MessageList();
@@ -744,52 +517,19 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     expect(joined).toContain('\x1b[36m│');   // FG_CYAN│ (assistant)
   });
 
-  test('hint line: tem │ na primeira coluna e traços preenchendo textWidth', () => {
+  test('linhas têm visual width = width (sem colunas de scrollbar)', () => {
     const list = new MessageList();
     for (let i = 0; i < 30; i++) {
       list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
     }
-    list.render(40, 10);  // inicializa estado
-    list.scrollUp(5);
-    const lines = list.render(40, 10);
-
-    // Primeira linha deve ser o hint
-    const hintStripped = stripAnsi(lines[0]);
-    expect(hintStripped[0]).toBe('│');    // left border presente
-    expect(hintStripped).toContain('▴');
-    expect(hintStripped).toContain('linhas acima');
-    expect(hintStripped).toContain('-');  // ASCII hyphen, safe EAW
-
-    // Scrollbar │ ainda deve estar presente
-    const chars = [...hintStripped];
-    expect(chars.at(-2)).toBe('│');   // SCROLLBAR_SEP penúltima coluna
-
-    // lines[1] deve ser o header da mensagem (NÃO substituído pelo hint)
-    const line1Stripped = stripAnsi(lines[1]);
-    expect(line1Stripped[0]).toBe('│');   // borda colorida da mensagem
-    expect(line1Stripped).toContain('You');  // header do user está presente
-  });
-
-  test('hint line: não substitui o header da mensagem no topo do viewport', () => {
-    const list = new MessageList();
-    for (let i = 0; i < 30; i++) {
-      list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
+    const width = 20, height = 5;
+    const lines = list.render(width, height);
+    expect(lines).toHaveLength(height);
+    // borda(1) + gap(1) + conteúdo(18) = 20 — sem scrollbar
+    for (const line of lines) {
+      const stripped = stripAnsi(line);
+      expect(stripped.length).toBe(width);
     }
-    list.render(40, 10);
-    list.scrollUp(3);
-    const lines = list.render(40, 10);
-
-    // Row 0 = hint
-    expect(stripAnsi(lines[0])).toContain('▴');
-    expect(stripAnsi(lines[0])).toContain('linhas acima');
-
-    // Row 1 = primeiro conteúdo real — deve ser header OU content, nunca "▴ N linhas acima"
-    const line1 = stripAnsi(lines[1]);
-    expect(line1).not.toContain('▴');
-    expect(line1).not.toContain('linhas acima');
-
-    // Deve ter exatamente height linhas no total
-    expect(lines).toHaveLength(10);
   });
 
   test('separador - entre mensagens', () => {
