@@ -155,8 +155,12 @@ tui.renderNow(): void
 tui.layout: ChatLayout  // acesso direto ao layout
 // start() faz space reservation: '\n' × rows + cursorUp(rows) para garantir
 // cursor em row 1 known-good antes do primeiro frame (evita ghost text).
+// stop() emite ERASE_SCREEN + cursorTo(1,1) antes de restaurar terminal
+// — evita que o frame atual seja empurrado para o scrollback no próximo start().
 // Renderer.invalidate() emite ERASE_SCREEN + cursorTo(1,1) antes do re-render
 // pós-resize, limpando a tela visível sem poluir o scrollback.
+// Renderer.render() ancora cursor na última linha com cursorTo(length, 1)
+// em ambos os paths (primeiro render e diff) — elimina cursor drift cumulativo.
 ```
 
 ### Scrollable
@@ -211,6 +215,7 @@ padEndAnsi(line: string, targetWidth: number): string
 | **31 — Buffer Primário** | `feat/session-31-buffer-primario` | ✅ merged | 333 |
 | **32 — Remove Scrollbar** | `feat/session-32-remove-scrollbar` | ✅ merged | 320 |
 | **33 — Ghost Text Fix** | `feat/session-33-ghost-text-fix` | ✅ merged | 323 |
+| **34 — Ghost Text Fix II** | `fix/session-34-ghost-text-scroll` | ✅ merged | 321 |
 | 11 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado
