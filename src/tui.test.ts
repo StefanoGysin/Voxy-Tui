@@ -40,20 +40,38 @@ describe('TUI', () => {
     expect(() => tui.scheduleRender()).not.toThrow();
   });
 
-  it('start() escreve ENTER_ALT_SCREEN no terminal', () => {
+  it('start() NÃO usa alt-screen buffer', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });
     tui.start();
-    expect(term.getOutput()).toContain('\x1b[?1049h');
+    expect(term.getOutput()).not.toContain('\x1b[?1049h');
+    expect(term.getOutput()).toContain('\x1b[?1002h');
   });
 
-  it('stop() escreve EXIT_ALT_SCREEN no terminal', () => {
+  it('stop() NÃO usa EXIT_ALT_SCREEN, restaura cursor', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });
     tui.start();
     term.reset();
     tui.stop();
-    expect(term.getOutput()).toContain('\x1b[?1049l');
+    expect(term.getOutput()).not.toContain('\x1b[?1049l');
+    expect(term.getOutput()).toContain('\x1b[?25h');
+  });
+
+  it('start() esconde cursor durante a TUI', () => {
+    const term = new MockTerminal();
+    tui = new TUI({ terminal: term });
+    tui.start();
+    expect(term.getOutput()).toContain('\x1b[?25l');
+  });
+
+  it('stop() desabilita mouse tracking', () => {
+    const term = new MockTerminal();
+    tui = new TUI({ terminal: term });
+    tui.start();
+    term.reset();
+    tui.stop();
+    expect(term.getOutput()).toContain('\x1b[?1002l');
   });
 
   it('adicionar mensagem e re-render produz output diferente', () => {
