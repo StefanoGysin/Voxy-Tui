@@ -758,7 +758,7 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     expect(hintStripped[0]).toBe('│');    // left border presente
     expect(hintStripped).toContain('▴');
     expect(hintStripped).toContain('linhas acima');
-    expect(hintStripped).toContain('─');  // traços presentes
+    expect(hintStripped).toContain('-');  // ASCII hyphen, safe EAW
 
     // Scrollbar │ ainda deve estar presente
     const chars = [...hintStripped];
@@ -792,14 +792,14 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     expect(lines).toHaveLength(10);
   });
 
-  test('separador ─ entre mensagens', () => {
+  test('separador - entre mensagens', () => {
     const list = new MessageList();
     list.addMessage({ id: '1', role: 'user', content: 'hello', timestamp: new Date() });
     list.addMessage({ id: '2', role: 'assistant', content: 'hi', timestamp: new Date() });
     const lines = list.render(30, 10);
     const stripped = lines.map(l => stripAnsi(l));
     // Deve ter linhas com ── (separador)
-    const separatorLines = stripped.filter(l => l.includes('──'));
+    const separatorLines = stripped.filter(l => l.includes('--'));
     expect(separatorLines.length).toBeGreaterThanOrEqual(2); // 1 por mensagem
   });
 });
