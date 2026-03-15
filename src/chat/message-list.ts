@@ -85,7 +85,7 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
     }
   }
 
-  lines.push(`${FG_GRAY}${DIM}${'─'.repeat(width)}${RESET}`);
+  lines.push(`${FG_GRAY}${DIM}${'-'.repeat(width)}${RESET}`);
   return lines;
 }
 
@@ -108,7 +108,7 @@ function renderMessage(msg: ChatMessage, width: number): string[] {
   }
 
   const contentLines = wrapText(msg.content, width);
-  const separator = `${FG_GRAY}${DIM}${'─'.repeat(width)}${RESET}`;
+  const separator = `${FG_GRAY}${DIM}${'-'.repeat(width)}${RESET}`;
   return [header, ...contentLines, separator];
 }
 
@@ -673,7 +673,7 @@ export class MessageList implements Component {
       const prefixWidth = measureWidth(prefix);
       // -1: garante 1 espaço antes do SCROLLBAR_SEP para evitar conexão visual ─│
       const dashCount = Math.max(0, textWidth - prefixWidth - 1);
-      const hintLine = `${FG_GRAY}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
+      const hintLine = `${FG_GRAY}${DIM}${prefix}${'-'.repeat(dashCount)}${RESET}`;
       const hintRow = SCROLLBAR_HINT_BORDER + ' ' + padEndAnsi(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
 
       // height-1 linhas de conteúdo: allLines[start .. start + height - 2]
