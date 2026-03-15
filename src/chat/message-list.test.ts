@@ -744,7 +744,7 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     expect(joined).toContain('\x1b[36m│');   // FG_CYAN│ (assistant)
   });
 
-  test('left border: hint de scroll não tem borda │', () => {
+  test('hint line: tem │ na primeira coluna e traços preenchendo textWidth', () => {
     const list = new MessageList();
     for (let i = 0; i < 30; i++) {
       list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
@@ -752,10 +752,17 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     list.render(40, 10);  // inicializa estado
     list.scrollUp(5);
     const lines = list.render(40, 10);
-    // Primeira linha deve ser hint (↑) sem borda │
-    const hintLine = stripAnsi(lines[0]);
-    expect(hintLine).toContain('↑');
-    expect(hintLine[0]).toBe(' ');  // espaço, não │
+
+    // Primeira linha deve ser o hint
+    const hintStripped = stripAnsi(lines[0]);
+    expect(hintStripped[0]).toBe('│');    // left border presente
+    expect(hintStripped).toContain('↑');
+    expect(hintStripped).toContain('linhas acima');
+    expect(hintStripped).toContain('─');  // traços presentes
+
+    // Scrollbar │ ainda deve estar presente
+    const chars = [...hintStripped];
+    expect(chars.at(-2)).toBe('│');   // SCROLLBAR_SEP penúltima coluna
   });
 
   test('separador ─ entre mensagens', () => {
