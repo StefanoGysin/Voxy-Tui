@@ -1,6 +1,6 @@
 import { ProcessTerminal, Renderer, RenderScheduler } from './core';
 import type { Terminal } from './core';
-import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, ERASE_SCREEN, cursorTo,
+import { CURSOR_HIDE, CURSOR_SHOW,
          ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING } from './core/ansi';
 import { ChatLayout } from './chat/chat-layout';
 
@@ -31,9 +31,8 @@ export class TUI {
     if (this.running) return;
     this.running = true;
 
-    // Tela alternativa + mouse tracking
-    this.terminal.write(ENTER_ALT_SCREEN + ERASE_SCREEN + cursorTo(1, 1));
-    this.terminal.write(ENABLE_MOUSE_TRACKING);
+    // Buffer primário: esconde cursor + mouse tracking
+    this.terminal.write('\r\n' + CURSOR_HIDE + ENABLE_MOUSE_TRACKING);
 
     this.resizeListener = () => {
       this.renderer.invalidate();
@@ -51,9 +50,8 @@ export class TUI {
     this.scheduler.dispose();
     this.layout.statusBar.dispose();
 
-    // Desabilitar mouse tracking ANTES de restaurar tela
-    this.terminal.write(DISABLE_MOUSE_TRACKING);
-    this.terminal.write(EXIT_ALT_SCREEN);
+    // Desabilitar mouse tracking + restaurar cursor
+    this.terminal.write(DISABLE_MOUSE_TRACKING + CURSOR_SHOW + '\r\n');
 
     if (this.resizeListener) {
       process.stdout.removeListener('resize', this.resizeListener);
