@@ -21,7 +21,8 @@ export class Renderer {
     // 2. Primeiro render: escrever tudo diretamente, sem diff
     if (this.isFirstRender) {
       this.isFirstRender = false;
-      const output = SYNC_START + currentLines.join('\n') + RESET + SYNC_END;
+      // cursorTo ancora cursor na última linha do frame — base consistente para diff renders.
+      const output = SYNC_START + currentLines.join('\n') + RESET + cursorTo(currentLines.length, 1) + SYNC_END;
       this.terminal.write(output);
       this.previousLines = currentLines;
       return;
@@ -53,6 +54,9 @@ export class Renderer {
       output += currentLines[i] + RESET;
       if (i < currentLines.length - 1) output += '\n';
     }
+    // cursorTo ancora cursor na última linha do frame — base consistente para o próximo
+    // cursorUp(N). Sem isto, cursor fica em length-1 e o próximo render deriva 1 row acima.
+    output += cursorTo(currentLines.length, 1);
     output += SYNC_END;
 
     // 7. Escrever tudo de uma vez — atomicidade

@@ -80,6 +80,23 @@ describe('Renderer', () => {
     expect(term.getOutput()).not.toBe('');
   });
 
+  test('primeiro render ancora cursor na última linha (cursorTo)', () => {
+    const term = new MockTerminal(80, 5);
+    const renderer = new Renderer(term);
+    renderer.render([makeComponent(['a', 'b', 'c', 'd', 'e'])]);
+    expect(term.getOutput()).toContain('\x1b[5;1H'); // cursorTo(5, 1)
+  });
+
+  test('diff render ancora cursor na última linha (sem drift)', () => {
+    const term = new MockTerminal(80, 5);
+    const renderer = new Renderer(term);
+    renderer.render([makeComponent(['a', 'b', 'c', 'd', 'e'])]);
+    term.reset();
+    // Diff: apenas última linha muda
+    renderer.render([makeComponent(['a', 'b', 'c', 'd', 'X'])]);
+    expect(term.getOutput()).toContain('\x1b[5;1H'); // cursorTo(5, 1)
+  });
+
   test('synchronized output envolve cada render', () => {
     const term = new MockTerminal();
     const renderer = new Renderer(term);
