@@ -22,7 +22,7 @@ describe('MessageList', () => {
     const lines = list.render(80, 10);
     const joined = lines.join('\n');
     const stripped = stripAnsi(joined);
-    expect(stripped).toContain('● You');
+    expect(stripped).toContain('⬥ You');
     expect(stripped).toContain('Hello');
   });
 
@@ -30,7 +30,7 @@ describe('MessageList', () => {
     list.addMessage(makeMsg('1', 'assistant', 'Hi there'));
     const lines = list.render(80, 10);
     const stripped = stripAnsi(lines.join('\n'));
-    expect(stripped).toContain('◆ Assistant');
+    expect(stripped).toContain('✦ Assistant');
     expect(stripped).toContain('Hi there');
   });
 
@@ -756,7 +756,7 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     // Primeira linha deve ser o hint
     const hintStripped = stripAnsi(lines[0]);
     expect(hintStripped[0]).toBe('│');    // left border presente
-    expect(hintStripped).toContain('↑');
+    expect(hintStripped).toContain('▴');
     expect(hintStripped).toContain('linhas acima');
     expect(hintStripped).toContain('─');  // traços presentes
 

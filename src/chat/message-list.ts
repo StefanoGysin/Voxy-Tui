@@ -95,13 +95,13 @@ function renderMessage(msg: ChatMessage, width: number): string[] {
 
   switch (msg.role) {
     case 'user':
-      header = `${FG_GREEN}${BOLD}● You${RESET} ${time}`;
+      header = `${FG_GREEN}${BOLD}⬥ You${RESET} ${time}`;
       break;
     case 'assistant':
-      header = `${FG_CYAN}${BOLD}◆ Assistant${RESET} ${time}`;
+      header = `${FG_CYAN}${BOLD}✦ Assistant${RESET} ${time}`;
       break;
     case 'system':
-      header = `${FG_GRAY}${ITALIC}◇ System${RESET} ${time}`;
+      header = `${FG_GRAY}${ITALIC}▸ System${RESET} ${time}`;
       break;
     case 'tool':
       return renderToolMessage(msg, width);
@@ -663,7 +663,7 @@ export class MessageList implements Component {
 
     // Indicador de scroll: substitui a primeira linha quando há conteúdo acima
     if (this.scrollOffset > 0) {
-      const prefix = `↑ ${this.scrollOffset} linhas acima `;
+      const prefix = `▴ ${this.scrollOffset} linhas acima `;
       const prefixWidth = measureWidth(prefix);
       const dashCount = Math.max(0, textWidth - prefixWidth);
       const hintLine = `${FG_GRAY}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
