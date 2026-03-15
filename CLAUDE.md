@@ -202,6 +202,7 @@ padEndAnsi(line: string, targetWidth: number): string
 | **8 — TUI Class + Demo** | `feat/session-8-demo` | ✅ merged | 134 |
 | **9 — Componentes Avançados** | `feat/session-9-advanced` | ✅ merged | 168 |
 | **10 — Bugfixes + Scrollable** | `feat/session-10-fixes` | ✅ merged | 190 |
+| **30 — EAW Dashes Fix** | `feat/session-30-eaw-dashes` | ✅ merged | 190 |
 | 11 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado
