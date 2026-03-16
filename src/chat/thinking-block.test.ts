@@ -19,17 +19,17 @@ describe('ThinkingBlock', () => {
     expect(line).toContain('Chain of thought');
   });
 
-  test('colapsado mostra hint "click expandir"', () => {
+  test('colapsado mostra contagem de linhas', () => {
     block.setContent('texto');
     const line = stripAnsi(block.render(80, 10)[0]);
-    expect(line).toContain('click expandir');
+    expect(line).toContain('1 linhas');
   });
 
-  test('expandido mostra hint "click recolher"', () => {
+  test('expandido mostra contagem de linhas', () => {
     block.setContent('texto');
     block.toggle();
     const line = stripAnsi(block.render(80, 10)[0]);
-    expect(line).toContain('click recolher');
+    expect(line).toContain('1 linhas');
   });
 
   test('expandido mostra ▼ e conteúdo', () => {

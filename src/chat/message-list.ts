@@ -142,6 +142,11 @@ export class MessageList implements Component {
   // ThinkingBlock instances (persiste collapsed state por mensagem)
   private thinkingBlocks = new Map<ChatMessage, ThinkingBlock>();
 
+  // Mapa allLineIdx → ThinkingBlock, reconstruído em cada render()
+  // Usado por handleMouse() para detectar clique no ThinkingBlock com coordenadas
+  // consistentes com lastAllLinesCount (evita off-by-1 durante streaming)
+  private thinkingLineMap = new Map<number, ThinkingBlock>();
+
   /** Callback chamado quando o usuário finaliza uma seleção. Recebe o texto selecionado. */
   onTextCopied?: (text: string) => void;
 
@@ -487,7 +492,7 @@ export class MessageList implements Component {
 
     const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
 
-    // Construir mapeamento linha → mensagem
+    // Construir mapeamento linha → mensagem (para toggle de tool messages)
     const lineToMsg: (ChatMessage | null)[] = []
     const msgStartMap = new Map<ChatMessage, number>()
     for (const msg of this.messages) {
@@ -498,26 +503,22 @@ export class MessageList implements Component {
       }
     }
 
-    const total = lineToMsg.length
-    const allLineIdx = this.screenYToAllLineIdx(event.y, total, height)
+    // Usar lastAllLinesCount (total do último render) — não lineToMsg.length.
+    // Durante streaming, lineToMsg pode ter mais linhas que o último render,
+    // causando padding errado em screenYToAllLineIdx e allLineIdx off-by-1.
+    // lineToMsg[allLineIdx] é seguro pois lineToMsg.length >= lastAllLinesCount.
+    const renderTotal = this.lastAllLinesCount
+    const allLineIdx = this.screenYToAllLineIdx(event.y, renderTotal, height)
 
-    if (allLineIdx < 0 || allLineIdx >= total) return false
+    if (allLineIdx < 0 || allLineIdx >= renderTotal) return false
     const msg = lineToMsg[allLineIdx]
     if (!msg) return false
 
     // === Click em qualquer linha do ThinkingBlock → toggle ===
-    if (msg.role === 'assistant' && msg.thinkingContent) {
-      const block = this.thinkingBlocks.get(msg)
-      if (block) {
-        const msgStart = msgStartMap.get(msg)!
-        const thinkingLineCount = block.render(textWidth, 10000).length
-        const thinkingStart = msgStart + 1        // logo após o header da mensagem
-        const thinkingEnd   = thinkingStart + thinkingLineCount  // exclusive
-        if (allLineIdx >= thinkingStart && allLineIdx < thinkingEnd) {
-          block.toggle()
-          return true
-        }
-      }
+    const thinkingBlock = this.thinkingLineMap.get(allLineIdx)
+    if (thinkingBlock) {
+      thinkingBlock.toggle()
+      return true
     }
 
     // === Click em tool message truncado → toggle collapsed ===
@@ -531,7 +532,7 @@ export class MessageList implements Component {
 
     const newLen = this.renderMsg(msg, textWidth).length
     const lineDelta = newLen - oldLen
-    const totalAfter = total + lineDelta
+    const totalAfter = lineToMsg.length + lineDelta
     const msgStart = msgStartMap.get(msg) ?? 0
 
     if (wasCollapsed) {
@@ -634,8 +635,23 @@ export class MessageList implements Component {
     // Renderizar todas as mensagens com textWidth
     const allLines: string[] = [];
     const allLineBorders: string[] = [];
+    this.thinkingLineMap.clear();
     for (const msg of this.messages) {
+      const lineStart = allLines.length;
       const msgLines = this.renderMsg(msg, textWidth);
+
+      // Construir thinkingLineMap: ThinkingBlock ocupa linhas após o header da msg
+      if (msg.thinkingContent) {
+        const block = this.thinkingBlocks.get(msg);
+        if (block) {
+          const thinkingStart = lineStart + 1; // +1 pula header da msg
+          const thinkingLineCount = block.render(textWidth, 10000).length;
+          for (let i = 0; i < thinkingLineCount; i++) {
+            this.thinkingLineMap.set(thinkingStart + i, block);
+          }
+        }
+      }
+
       const borderChar = getMsgBorderAnsi(msg.role);
       for (const line of msgLines) {
         allLines.push(line);
