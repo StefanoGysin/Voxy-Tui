@@ -691,3 +691,83 @@ describe('MessageList — markdown rendering', () => {
     expect(stripAnsi(contentLines[0])).toContain('**texto**');
   });
 });
+
+describe('MessageList — ThinkingBlock', () => {
+  test('assistant SEM thinkingContent: output NÃO contém Chain of thought', () => {
+    const list = new MessageList();
+    list.addMessage({ id: '1', role: 'assistant', content: 'Hello', timestamp: new Date() });
+    const lines = list.render(80, 10);
+    const stripped = stripAnsi(lines.join('\n'));
+    expect(stripped).not.toContain('Chain of thought');
+  });
+
+  test('assistant COM thinkingContent: output contém ▶ e Chain of thought', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resposta',
+      timestamp: new Date(), thinkingContent: 'Pensando sobre isso...',
+    });
+    const lines = list.render(80, 10);
+    const stripped = stripAnsi(lines.join('\n'));
+    expect(stripped).toContain('▶');
+    expect(stripped).toContain('Chain of thought');
+  });
+
+  test('assistant COM thinkingContent: contém a resposta normal após o bloco', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resposta final',
+      timestamp: new Date(), thinkingContent: 'Raciocínio interno',
+    });
+    const lines = list.render(80, 10);
+    const stripped = stripAnsi(lines.join('\n'));
+    expect(stripped).toContain('Chain of thought');
+    expect(stripped).toContain('Resposta final');
+  });
+
+  test('ThinkingBlock collapsed por padrão (apenas 1 linha de header)', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resp',
+      timestamp: new Date(), thinkingContent: 'Linha 1\nLinha 2\nLinha 3',
+    });
+    const lines = list.render(80, 20);
+    const stripped = lines.map(l => stripAnsi(l));
+    // Deve conter o header do thinking block
+    const thinkingHeaders = stripped.filter(l => l.includes('Chain of thought'));
+    expect(thinkingHeaders).toHaveLength(1);
+    // O conteúdo do thinking NÃO deve aparecer (collapsed)
+    expect(stripped.join('\n')).not.toContain('Linha 1');
+    expect(stripped.join('\n')).not.toContain('Linha 2');
+  });
+
+  test('click no header do ThinkingBlock → toggle → expandido', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resp',
+      timestamp: new Date(), thinkingContent: 'Pensamento secreto',
+    });
+    const lines = list.render(80, 20);
+    const stripped = lines.map(l => stripAnsi(l));
+
+    // Encontrar a linha do header do ThinkingBlock
+    const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
+    expect(thinkingIdx).toBeGreaterThanOrEqual(0);
+
+    // Confirmar collapsed: conteúdo não visível
+    expect(stripped.join('\n')).not.toContain('Pensamento secreto');
+
+    // Press (registra anchor)
+    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
+    // Release (toggle)
+    const consumed = list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: true });
+    expect(consumed).toBe(true);
+
+    // Re-render: agora deve mostrar o conteúdo expandido
+    const linesAfter = list.render(80, 20);
+    const strippedAfter = linesAfter.map(l => stripAnsi(l));
+    expect(strippedAfter.join('\n')).toContain('Pensamento secreto');
+    // Deve mostrar ▼ (expandido) ao invés de ▶
+    expect(strippedAfter.join('\n')).toContain('▼');
+  });
+});
