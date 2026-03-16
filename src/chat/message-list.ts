@@ -2,7 +2,7 @@ import type { Component, MouseClickEvent, MouseDragEvent } from '../core/compone
 import type { ChatMessage } from './types';
 import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED, FG_YELLOW } from '../core/ansi';
 import { wrapText } from '../utils/wrap';
-import { padEndAnsi, byteIndexAtVisualCol } from '../utils/width';
+import { padEndAnsi, byteIndexAtVisualCol, measureWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 
 function formatTime(date: Date): string {
@@ -11,11 +11,18 @@ function formatTime(date: Date): string {
 
 const TOOL_COLLAPSED_OUTPUT_LINES = 3;
 
+// Scrollbar
 // Seleção de texto — blue background (preserva cores originais fora da seleção)
 const SEL_HL  = '\x1b[44m';  // blue background (standard, todos os terminais)
 const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/etc.)
 
+// Scrollbar — separador + background color
+const SCROLLBAR_SEP   = '\x1b[38;5;236m│\x1b[0m';
+const SCROLLBAR_THUMB = '\x1b[48;5;240m\x1b[38;5;248m▐\x1b[0m';
+const SCROLLBAR_TRACK = '\x1b[48;5;234m\x1b[38;5;237m╎\x1b[0m';
+const SCROLLBAR_HINT_BORDER = '\x1b[38;5;237m│\x1b[0m';
 const MARGIN_LEFT = 2;  // espaço de respiração à esquerda do conteúdo
+const SCROLLBAR_PAGE_LINES = 10;
 
 /** Retorna o caractere ANSI colorido de borda esquerda para a role dada. */
 function getMsgBorderAnsi(role: ChatMessage['role']): string {
@@ -119,6 +126,13 @@ export class MessageList implements Component {
   private isDragging:        boolean = false;
   private lastDragScreenY:   number  = -1;     // último screen-Y do drag (para scroll-extend)
   private lastAllLinesCount: number  = 0;      // cacheado em render() — necessário para scroll-extend
+
+  // Scrollbar interaction state
+  private isScrollable               = false;
+  private lastScrollbarThumbPos      = 0;
+  private lastScrollbarThumbSize     = 0;
+  private isScrollbarDrag            = false;
+  private scrollbarDragHandleOffset  = 0;
 
   /** Callback chamado quando o usuário finaliza uma seleção. Recebe o texto selecionado. */
   onTextCopied?: (text: string) => void;
@@ -240,7 +254,8 @@ export class MessageList implements Component {
     const clampedOffset = Math.min(this.scrollOffset, maxOffset);
     const end = total - clampedOffset;
     const start = end - height;
-    return start + (screenY - 1);
+    const hintOffset = clampedOffset > 0 ? 1 : 0;
+    return start + (screenY - 1) - hintOffset;
   }
 
   /**
@@ -256,7 +271,7 @@ export class MessageList implements Component {
       return
     }
 
-    const textWidth = width - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
+    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
     const allLines: string[] = []
     for (const msg of this.messages) {
       allLines.push(...renderMessage(msg, textWidth))
@@ -373,6 +388,33 @@ export class MessageList implements Component {
    * - RIGHT RELEASE com seleção ativa: copia texto + limpa seleção.
    */
   handleMouse(event: MouseClickEvent): boolean {
+    // Limpar scrollbar drag em qualquer release
+    if (event.isRelease && this.isScrollbarDrag) {
+      this.isScrollbarDrag = false
+      return true
+    }
+
+    // === SCROLLBAR COLUMN — interceptar ANTES de tudo ===
+    if (this.isScrollable && event.x === this.lastRenderWidth) {
+      if (!event.isRelease) {
+        const screenY    = event.y - 1
+        const thumbStart = this.lastScrollbarThumbPos
+        const thumbEnd   = thumbStart + this.lastScrollbarThumbSize
+
+        if (screenY >= thumbStart && screenY < thumbEnd) {
+          this.isScrollbarDrag           = true
+          this.scrollbarDragHandleOffset = screenY - thumbStart
+        } else if (screenY < thumbStart) {
+          this.scrollUp(SCROLLBAR_PAGE_LINES)
+        } else {
+          this.scrollDown(SCROLLBAR_PAGE_LINES)
+        }
+      } else {
+        this.isScrollbarDrag = false
+      }
+      return true
+    }
+
     // === RIGHT CLICK RELEASE → copiar seleção e limpar ===
     if (event.button === 2) {
       if (event.isRelease && this.isSelectionActive()) {
@@ -416,7 +458,7 @@ export class MessageList implements Component {
     const height = this.lastRenderHeight
     if (height <= 0 || width <= 0) return false
 
-    const textWidth = width - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
+    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
 
     // Construir mapeamento linha → mensagem
     const lineToMsg: (ChatMessage | null)[] = []
@@ -466,6 +508,23 @@ export class MessageList implements Component {
    * Converte screenY para allLines-index space e atualiza selCurrentIdx.
    */
   handleMouseDrag(event: MouseDragEvent): boolean {
+    // === SCROLLBAR DRAG ===
+    if (this.isScrollbarDrag) {
+      const height       = this.lastRenderHeight
+      const thumbSize    = this.lastScrollbarThumbSize
+      const trackRange   = height - thumbSize
+      const maxOffset    = Math.max(0, this.lastAllLinesCount - height)
+
+      if (trackRange > 0 && maxOffset > 0) {
+        const newThumbTop = (event.y - 1) - this.scrollbarDragHandleOffset
+        const clamped     = Math.max(0, Math.min(trackRange, newThumbTop))
+        this.scrollOffset = Math.round(maxOffset * (1 - clamped / trackRange))
+        this.scrollOffset = Math.max(0, Math.min(maxOffset, this.scrollOffset))
+        this.stickyBottom = this.scrollOffset === 0
+      }
+      return true
+    }
+
     if (event.button !== 0) return false;
 
     // Drag sem press prévio (press veio de fora da área da MessageList)
@@ -498,13 +557,33 @@ export class MessageList implements Component {
     this.clearSelectionState()
   }
 
+  private renderScrollbar(height: number, totalLines: number, maxOffset: number): string[] {
+    const thumbSize = Math.max(1, Math.round((height * height) / totalLines));
+    const thumbPos = maxOffset === 0
+      ? height - thumbSize
+      : Math.round(((maxOffset - this.scrollOffset) / maxOffset) * (height - thumbSize));
+
+    this.lastScrollbarThumbPos  = thumbPos;
+    this.lastScrollbarThumbSize = thumbSize;
+
+    const bar: string[] = [];
+    for (let i = 0; i < height; i++) {
+      if (i >= thumbPos && i < thumbPos + thumbSize) {
+        bar.push(`\x1b[38;5;102m${SCROLLBAR_THUMB}${RESET}`);
+      } else {
+        bar.push(`\x1b[38;5;238m${SCROLLBAR_TRACK}${RESET}`);
+      }
+    }
+    return bar;
+  }
+
   render(width: number, height: number): string[] {
     if (height <= 0) return [];
 
     this.lastRenderWidth = width;
     this.lastRenderHeight = height;
 
-    const textWidth = width - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
+    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
 
     // Renderizar todas as mensagens com textWidth
     const allLines: string[] = [];
@@ -519,6 +598,9 @@ export class MessageList implements Component {
     }
     // Cachear count para uso em updateSelOnScroll() (scroll durante drag)
     this.lastAllLinesCount = allLines.length;
+
+    const isScrollable = allLines.length > height;
+    this.isScrollable = isScrollable;
 
     // Normalizar seleção: garantir selFrom < selTo em allLines-index space
     let selFromIdx = -1, selFromX = 0, selToIdx = -1, selToX = 0
@@ -540,8 +622,8 @@ export class MessageList implements Component {
       selToIdx   = Math.min(allLines.length - 1, selToIdx)
     }
 
-    // === Caso: conteúdo cabe na viewport ===
-    if (allLines.length <= height) {
+    // === Caso: conteúdo cabe na viewport (sem scrollbar) ===
+    if (!isScrollable) {
       const padding = height - allLines.length;
       return [
         ...Array<string>(padding).fill(''),
@@ -553,8 +635,7 @@ export class MessageList implements Component {
       ];
     }
 
-    // === Caso: overflow — slice das últimas height linhas ===
-    // Terminal gerencia scrollback. Não há scrollbar visual.
+    // === Caso: overflow — mostrar scrollbar ===
     const maxOffset = Math.max(0, allLines.length - height);
     if (this.scrollOffset > maxOffset) {
       this.scrollOffset = maxOffset;
@@ -563,11 +644,32 @@ export class MessageList implements Component {
     const end = allLines.length - this.scrollOffset;
     const start = end - height;
 
-    return allLines.slice(start, end).map((line, i) => {
+    const scrollbar = this.renderScrollbar(height, allLines.length, maxOffset);
+
+    if (this.scrollOffset > 0) {
+      const prefix = `▴ ${this.scrollOffset} linhas acima `;
+      const prefixWidth = measureWidth(prefix);
+      const dashCount = Math.max(0, textWidth - prefixWidth - 1);
+      const hintLine = `${FG_GRAY}${DIM}${prefix}${'-'.repeat(dashCount)}${RESET}`;
+      const hintRow = SCROLLBAR_HINT_BORDER + ' ' + padEndAnsi(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
+
+      const contentSlice = allLines.slice(start, start + height - 1);
+      const contentRows = contentSlice.map((line, i) => {
+        const allLineIdx = start + i;
+        const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
+        const border = allLineBorders[allLineIdx] ?? ' ';
+        return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i + 1];
+      });
+
+      return [hintRow, ...contentRows];
+    }
+
+    const sliced = allLines.slice(start, end);
+    return sliced.map((line, i) => {
       const allLineIdx = start + i;
       const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
       const border = allLineBorders[allLineIdx] ?? ' ';
-      return padEndAnsi(border + ' ' + hl, width);
+      return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i];
     });
   }
 }
