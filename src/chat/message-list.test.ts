@@ -799,6 +799,63 @@ describe('MessageList — ThinkingBlock', () => {
     expect(strippedAfter.join('\n')).toContain('▼');
   });
 
+  test('click na linha de conteúdo do ThinkingBlock expandido → toggle (recolhe)', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resp',
+      timestamp: new Date(), thinkingContent: 'Linha pensamento 1\nLinha pensamento 2',
+    });
+
+    // Primeiro, expandir o bloco clicando no header
+    let lines = list.render(80, 20);
+    let stripped = lines.map(l => stripAnsi(l));
+    const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
+    expect(thinkingIdx).toBeGreaterThanOrEqual(0);
+
+    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
+    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: true });
+
+    // Confirmar expandido
+    lines = list.render(80, 20);
+    stripped = lines.map(l => stripAnsi(l));
+    expect(stripped.join('\n')).toContain('Linha pensamento 1');
+
+    // Encontrar a linha de conteúdo do thinking (não o header, que mudou de posição)
+    const newThinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
+    const contentIdx = stripped.findIndex(l => l.includes('Linha pensamento 1'));
+    expect(contentIdx).toBeGreaterThan(newThinkingIdx);
+
+    // Clicar na linha de conteúdo → deve fazer toggle (recolher)
+    list.handleMouse({ x: 5, y: contentIdx + 1, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: contentIdx + 1, button: 0, isRelease: true });
+    expect(consumed).toBe(true);
+
+    // Após toggle: conteúdo deve estar oculto
+    lines = list.render(80, 20);
+    stripped = lines.map(l => stripAnsi(l));
+    expect(stripped.join('\n')).not.toContain('Linha pensamento 1');
+    expect(stripped.join('\n')).toContain('▶');
+  });
+
+  test('click na linha de texto (resposta) NÃO faz toggle do ThinkingBlock', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resposta visivel',
+      timestamp: new Date(), thinkingContent: 'Pensamento interno',
+    });
+    const lines = list.render(80, 20);
+    const stripped = lines.map(l => stripAnsi(l));
+
+    // Encontrar a linha da resposta (não do thinking)
+    const respostaIdx = stripped.findIndex(l => l.includes('Resposta visivel'));
+    expect(respostaIdx).toBeGreaterThanOrEqual(0);
+
+    // Clicar na linha da resposta → NÃO deve consumir (não é thinking)
+    list.handleMouse({ x: 5, y: respostaIdx + 1, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: respostaIdx + 1, button: 0, isRelease: true });
+    expect(consumed).toBe(false);
+  });
+
   test('drag real (linhas diferentes) → seleção persiste, ThinkingBlock NÃO toggled', () => {
     const list = new MessageList();
     list.addMessage({
