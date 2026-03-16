@@ -770,4 +770,59 @@ describe('MessageList — ThinkingBlock', () => {
     // Deve mostrar ▼ (expandido) ao invés de ▶
     expect(strippedAfter.join('\n')).toContain('▼');
   });
+
+  test('click com drag espúrio (mesma linha) → ThinkingBlock deve expandir', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resp',
+      timestamp: new Date(), thinkingContent: 'Pensamento secreto',
+    });
+    const lines = list.render(80, 20);
+    const stripped = lines.map(l => stripAnsi(l));
+
+    const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
+    expect(thinkingIdx).toBeGreaterThanOrEqual(0);
+    expect(stripped.join('\n')).not.toContain('Pensamento secreto');
+
+    // Press
+    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
+    // Drag espúrio — mesma linha (simula terminal enviando motion event sem mover)
+    list.handleMouseDrag({ x: 6, y: thinkingIdx + 1, button: 0 });
+    // Release
+    const consumed = list.handleMouse({ x: 6, y: thinkingIdx + 1, button: 0, isRelease: true });
+    expect(consumed).toBe(true);
+
+    // Re-render: deve estar expandido
+    const linesAfter = list.render(80, 20);
+    const strippedAfter = linesAfter.map(l => stripAnsi(l));
+    expect(strippedAfter.join('\n')).toContain('Pensamento secreto');
+    expect(strippedAfter.join('\n')).toContain('▼');
+  });
+
+  test('drag real (linhas diferentes) → seleção persiste, ThinkingBlock NÃO toggled', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resp',
+      timestamp: new Date(), thinkingContent: 'Pensamento secreto',
+    });
+    const lines = list.render(80, 20);
+    const stripped = lines.map(l => stripAnsi(l));
+
+    const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
+    expect(thinkingIdx).toBeGreaterThanOrEqual(0);
+
+    // Press na linha do thinking
+    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
+    // Drag real — move para outra linha
+    list.handleMouseDrag({ x: 5, y: thinkingIdx + 2, button: 0 });
+    // Release em linha diferente
+    const consumed = list.handleMouse({ x: 5, y: thinkingIdx + 2, button: 0, isRelease: true });
+    expect(consumed).toBe(true);
+
+    // Re-render: thinking NÃO deve expandir (drag real = seleção, não clique)
+    const linesAfter = list.render(80, 20);
+    const strippedAfter = linesAfter.map(l => stripAnsi(l));
+    expect(strippedAfter.join('\n')).not.toContain('Pensamento secreto');
+    expect(strippedAfter.join('\n')).toContain('▶');
+  });
 });
