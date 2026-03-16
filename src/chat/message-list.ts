@@ -142,6 +142,9 @@ export class MessageList implements Component {
   // ThinkingBlock instances (persiste collapsed state por mensagem)
   private thinkingBlocks = new Map<ChatMessage, ThinkingBlock>();
 
+  // Map allLines-index → ThinkingBlock, construído em render()
+  private thinkingLineMap = new Map<number, ThinkingBlock>();
+
   /** Callback chamado quando o usuário finaliza uma seleção. Recebe o texto selecionado. */
   onTextCopied?: (text: string) => void;
 
@@ -506,18 +509,10 @@ export class MessageList implements Component {
     if (!msg) return false
 
     // === Click em qualquer linha do ThinkingBlock → toggle ===
-    if (msg.role === 'assistant' && msg.thinkingContent) {
-      const block = this.thinkingBlocks.get(msg)
-      if (block) {
-        const msgStart = msgStartMap.get(msg)!
-        const thinkingLineCount = block.render(textWidth, 10000).length
-        const thinkingStart = msgStart + 1        // logo após o header da mensagem
-        const thinkingEnd   = thinkingStart + thinkingLineCount  // exclusive
-        if (allLineIdx >= thinkingStart && allLineIdx < thinkingEnd) {
-          block.toggle()
-          return true
-        }
-      }
+    const thinkingBlock = this.thinkingLineMap.get(allLineIdx)
+    if (thinkingBlock) {
+      thinkingBlock.toggle()
+      return true
     }
 
     // === Click em tool message truncado → toggle collapsed ===
@@ -600,6 +595,7 @@ export class MessageList implements Component {
     this.scrollOffset = 0
     this.stickyBottom = true
     this.thinkingBlocks.clear()
+    this.thinkingLineMap.clear()
     this.clearSelectionState()
   }
 
@@ -634,8 +630,20 @@ export class MessageList implements Component {
     // Renderizar todas as mensagens com textWidth
     const allLines: string[] = [];
     const allLineBorders: string[] = [];
+    this.thinkingLineMap.clear();
     for (const msg of this.messages) {
       const msgLines = this.renderMsg(msg, textWidth);
+      // Mapear linhas do ThinkingBlock antes de pushear em allLines
+      if (msg.thinkingContent) {
+        const block = this.thinkingBlocks.get(msg);
+        if (block) {
+          const thinkingStart = allLines.length + 1; // +1 pula o header da mensagem
+          const thinkingCount = block.minHeight();
+          for (let i = 0; i < thinkingCount; i++) {
+            this.thinkingLineMap.set(thinkingStart + i, block);
+          }
+        }
+      }
       const borderChar = getMsgBorderAnsi(msg.role);
       for (const line of msgLines) {
         allLines.push(line);
