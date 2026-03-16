@@ -153,10 +153,9 @@ tui.stop(): void    // para tudo, idempotente
 tui.scheduleRender(): void
 tui.renderNow(): void
 tui.layout: ChatLayout  // acesso direto ao layout
-// start() faz space reservation: '\n' × rows + cursorUp(rows) para garantir
-// cursor em row 1 known-good antes do primeiro frame (evita ghost text).
-// stop() emite ERASE_SCREEN + cursorTo(1,1) antes de restaurar terminal
-// — evita que o frame atual seja empurrado para o scrollback no próximo start().
+// start() faz ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1,1) para garantir
+// cursor em (1,1) known-good E scrollback limpo (evita scrollbar nativa do terminal).
+// stop() emite ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1,1) antes de restaurar terminal.
 // Renderer.invalidate() emite ERASE_SCREEN + cursorTo(1,1) antes do re-render
 // pós-resize, limpando a tela visível sem poluir o scrollback.
 // Renderer.render() ancora cursor na última linha com cursorTo(length, 1)
