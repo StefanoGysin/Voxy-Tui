@@ -467,10 +467,15 @@ export class MessageList implements Component {
 
     // === LEFT RELEASE com drag → manter highlight (sem copiar) ===
     if (this.isDragging && this.selAnchorIdx >= 0 && this.selCurrentIdx >= 0) {
-      this.isDragging      = false
-      this.lastDragScreenY = -1
-      this.selFinalized    = true
-      return true
+      if (this.selAnchorIdx !== this.selCurrentIdx) {
+        // Drag real — cursor moveu para outra linha → manter seleção
+        this.isDragging      = false
+        this.lastDragScreenY = -1
+        this.selFinalized    = true
+        return true
+      }
+      // Mesma linha — drag espúrio, tratar como clique simples
+      this.isDragging = false
     }
 
     // === LEFT RELEASE sem drag → click (expand/collapse tool message) ===
