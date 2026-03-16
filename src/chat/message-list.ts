@@ -505,12 +505,18 @@ export class MessageList implements Component {
     const msg = lineToMsg[allLineIdx]
     if (!msg) return false
 
-    // === Click no header do ThinkingBlock → toggle ===
+    // === Click em qualquer linha do ThinkingBlock → toggle ===
     if (msg.role === 'assistant' && msg.thinkingContent) {
-      const msgStart = msgStartMap.get(msg)
-      if (msgStart !== undefined && allLineIdx === msgStart + 1) {
-        const block = this.thinkingBlocks.get(msg)
-        if (block) { block.toggle(); return true }
+      const block = this.thinkingBlocks.get(msg)
+      if (block) {
+        const msgStart = msgStartMap.get(msg)!
+        const thinkingLineCount = block.render(textWidth, 10000).length
+        const thinkingStart = msgStart + 1        // logo após o header da mensagem
+        const thinkingEnd   = thinkingStart + thinkingLineCount  // exclusive
+        if (allLineIdx >= thinkingStart && allLineIdx < thinkingEnd) {
+          block.toggle()
+          return true
+        }
       }
     }
 

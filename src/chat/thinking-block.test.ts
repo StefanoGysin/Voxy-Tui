@@ -19,6 +19,19 @@ describe('ThinkingBlock', () => {
     expect(line).toContain('Chain of thought');
   });
 
+  test('colapsado mostra hint "click expandir"', () => {
+    block.setContent('texto');
+    const line = stripAnsi(block.render(80, 10)[0]);
+    expect(line).toContain('click expandir');
+  });
+
+  test('expandido mostra hint "click recolher"', () => {
+    block.setContent('texto');
+    block.toggle();
+    const line = stripAnsi(block.render(80, 10)[0]);
+    expect(line).toContain('click recolher');
+  });
+
   test('expandido mostra ▼ e conteúdo', () => {
     block.setContent('linha 1\nlinha 2');
     block.toggle();
