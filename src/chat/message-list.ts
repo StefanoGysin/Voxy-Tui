@@ -454,20 +454,34 @@ export class MessageList implements Component {
     // Ignorar tudo que não for botão esquerdo (button=0)
     if (event.button !== 0) return false
 
-    // === LEFT PRESS — registrar âncora e limpar seleção anterior ===
+    // === LEFT PRESS — verificar ThinkingBlock ANTES de registrar âncora ===
     if (!event.isRelease) {
-      this.clearSelectionState()
-      this.lastDragScreenY = event.y
-
-      // Converter para allLines-index space e registrar âncora com coluna X
-      const total  = this.lastAllLinesCount
-      const height = this.lastRenderHeight
-      if (total > 0 && height > 0) {
-        const idx = this.screenYToAllLineIdx(event.y, total, height)
-        this.selAnchorIdx = Math.max(0, Math.min(total - 1, idx))
-        this.selAnchorX   = Math.max(0, event.x - 1 - MARGIN_LEFT)  // converter 1-based → 0-based, descontar margem
+      // Toggle no PRESS: evita falha quando Windows Terminal / ConPTY envia drag events
+      // espúrios entre press e release (faz code tratar como "drag real" → release ignorado).
+      const totalP  = this.lastAllLinesCount;
+      const heightP = this.lastRenderHeight;
+      if (totalP > 0 && heightP > 0) {
+        const idxP = this.screenYToAllLineIdx(event.y, totalP, heightP);
+        if (idxP >= 0 && idxP < totalP) {
+          const thinkingBlockP = this.thinkingLineMap.get(idxP);
+          if (thinkingBlockP) {
+            thinkingBlockP.toggle();
+            return true;  // press consumido — não inicia seleção de texto
+          }
+        }
       }
-      return false   // press não consome
+
+      // Seleção de texto: registrar âncora
+      this.clearSelectionState();
+      this.lastDragScreenY = event.y;
+      const total  = this.lastAllLinesCount;
+      const height = this.lastRenderHeight;
+      if (total > 0 && height > 0) {
+        const idx = this.screenYToAllLineIdx(event.y, total, height);
+        this.selAnchorIdx = Math.max(0, Math.min(total - 1, idx));
+        this.selAnchorX   = Math.max(0, event.x - 1 - MARGIN_LEFT);
+      }
+      return false;   // press não consome (seleção em andamento)
     }
 
     // === LEFT RELEASE com drag → manter highlight (sem copiar) ===
@@ -513,13 +527,6 @@ export class MessageList implements Component {
     if (allLineIdx < 0 || allLineIdx >= renderTotal) return false
     const msg = lineToMsg[allLineIdx]
     if (!msg) return false
-
-    // === Click em qualquer linha do ThinkingBlock → toggle ===
-    const thinkingBlock = this.thinkingLineMap.get(allLineIdx)
-    if (thinkingBlock) {
-      thinkingBlock.toggle()
-      return true
-    }
 
     // === Click em tool message truncado → toggle collapsed ===
     if (msg.role !== 'tool') return false

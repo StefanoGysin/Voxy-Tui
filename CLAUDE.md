@@ -174,6 +174,16 @@ scrollable.getScrollOffset(): number
 // render() passa height=10000 para o filho — filho deve renderizar todo conteúdo
 ```
 
+### ThinkingBlock
+```typescript
+new ThinkingBlock()
+block.setContent(text: string): void
+block.isCollapsed(): boolean
+block.toggle(): void
+// render(width, _height): usa width para wrap de conteúdo (linhas wrapped a Math.max(1, width-2))
+// Toggle via click ocorre no PRESS (não no release) — evita falha com drag events espúrios do Windows Terminal
+```
+
 ### `padEndAnsi` (novo utilitário)
 ```typescript
 import { padEndAnsi } from 'voxy-tui';
@@ -215,6 +225,7 @@ padEndAnsi(line: string, targetWidth: number): string
 | **32 — Remove Scrollbar** | `feat/session-32-remove-scrollbar` | ✅ merged | 320 |
 | **33 — Ghost Text Fix** | `feat/session-33-ghost-text-fix` | ✅ merged | 323 |
 | **34 — Ghost Text Fix II** | `fix/session-34-ghost-text-scroll` | ✅ merged | 321 |
+| **35B — ThinkingBlock Fixes** | `feat/session-35b-thinking-block-fixes` | ✅ merged | 356 |
 | 11 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado

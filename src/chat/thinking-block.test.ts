@@ -11,10 +11,10 @@ describe('ThinkingBlock', () => {
     expect(block.render(80, 10)).toHaveLength(1);
   });
 
-  test('colapsado mostra ▶ e contagem de linhas', () => {
+  test('colapsado mostra ▸ e contagem de linhas', () => {
     block.setContent('linha 1\nlinha 2\nlinha 3');
     const line = stripAnsi(block.render(80, 10)[0]);
-    expect(line).toContain('▶');
+    expect(line).toContain('▸');
     expect(line).toContain('3 linhas');
     expect(line).toContain('Chain of thought');
   });

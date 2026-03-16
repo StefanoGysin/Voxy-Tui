@@ -701,7 +701,7 @@ describe('MessageList — ThinkingBlock', () => {
     expect(stripped).not.toContain('Chain of thought');
   });
 
-  test('assistant COM thinkingContent: output contém ▶ e Chain of thought', () => {
+  test('assistant COM thinkingContent: output contém ▸ e Chain of thought', () => {
     const list = new MessageList();
     list.addMessage({
       id: '1', role: 'assistant', content: 'Resposta',
@@ -709,7 +709,7 @@ describe('MessageList — ThinkingBlock', () => {
     });
     const lines = list.render(80, 10);
     const stripped = stripAnsi(lines.join('\n'));
-    expect(stripped).toContain('▶');
+    expect(stripped).toContain('▸');
     expect(stripped).toContain('Chain of thought');
   });
 
@@ -757,11 +757,11 @@ describe('MessageList — ThinkingBlock', () => {
     // Confirmar collapsed: conteúdo não visível
     expect(stripped.join('\n')).not.toContain('Pensamento secreto');
 
-    // Press (registra anchor)
-    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
-    // Release (toggle)
-    const consumed = list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: true });
+    // consumed no press (toggle acontece no press)
+    const consumed = list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
     expect(consumed).toBe(true);
+    // release não consome
+    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: true });
 
     // Re-render: agora deve mostrar o conteúdo expandido
     const linesAfter = list.render(80, 20);
@@ -784,13 +784,12 @@ describe('MessageList — ThinkingBlock', () => {
     expect(thinkingIdx).toBeGreaterThanOrEqual(0);
     expect(stripped.join('\n')).not.toContain('Pensamento secreto');
 
-    // Press
-    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
-    // Drag espúrio — mesma linha (simula terminal enviando motion event sem mover)
-    list.handleMouseDrag({ x: 6, y: thinkingIdx + 1, button: 0 });
-    // Release
-    const consumed = list.handleMouse({ x: 6, y: thinkingIdx + 1, button: 0, isRelease: true });
+    // Press → toggle imediato (consumido)
+    const consumed = list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
     expect(consumed).toBe(true);
+    // Drag e release: ignorados (press foi consumido, sem anchor)
+    list.handleMouseDrag({ x: 6, y: thinkingIdx + 1, button: 0 });
+    list.handleMouse({ x: 6, y: thinkingIdx + 1, button: 0, isRelease: true });
 
     // Re-render: deve estar expandido
     const linesAfter = list.render(80, 20);
@@ -806,13 +805,14 @@ describe('MessageList — ThinkingBlock', () => {
       timestamp: new Date(), thinkingContent: 'Linha pensamento 1\nLinha pensamento 2',
     });
 
-    // Primeiro, expandir o bloco clicando no header
+    // Primeiro, expandir o bloco clicando no header (toggle via press)
     let lines = list.render(80, 20);
     let stripped = lines.map(l => stripAnsi(l));
     const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
     expect(thinkingIdx).toBeGreaterThanOrEqual(0);
 
-    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
+    const firstConsumed = list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
+    expect(firstConsumed).toBe(true);
     list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: true });
 
     // Confirmar expandido
@@ -825,16 +825,16 @@ describe('MessageList — ThinkingBlock', () => {
     const contentIdx = stripped.findIndex(l => l.includes('Linha pensamento 1'));
     expect(contentIdx).toBeGreaterThan(newThinkingIdx);
 
-    // Clicar na linha de conteúdo → deve fazer toggle (recolher)
-    list.handleMouse({ x: 5, y: contentIdx + 1, button: 0, isRelease: false });
-    const consumed = list.handleMouse({ x: 5, y: contentIdx + 1, button: 0, isRelease: true });
+    // Segundo toggle (recolher via press na linha de conteúdo)
+    const consumed = list.handleMouse({ x: 5, y: contentIdx + 1, button: 0, isRelease: false });
     expect(consumed).toBe(true);
+    list.handleMouse({ x: 5, y: contentIdx + 1, button: 0, isRelease: true });
 
     // Após toggle: conteúdo deve estar oculto
     lines = list.render(80, 20);
     stripped = lines.map(l => stripAnsi(l));
     expect(stripped.join('\n')).not.toContain('Linha pensamento 1');
-    expect(stripped.join('\n')).toContain('▶');
+    expect(stripped.join('\n')).toContain('▸');
   });
 
   test('click na linha de texto (resposta) NÃO faz toggle do ThinkingBlock', () => {
@@ -872,9 +872,9 @@ describe('MessageList — ThinkingBlock', () => {
 
     // screenY é 1-based
     const screenY = thinkingIdx + 1;
-    list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: false });
-    const consumed = list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: true });
+    const consumed = list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: false });
     expect(consumed).toBe(true);
+    list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: true });
 
     // Verificar: expandido (▼ visível, conteúdo visível)
     const linesAfter = list.render(WIDTH, HEIGHT);
@@ -908,11 +908,11 @@ describe('MessageList — ThinkingBlock', () => {
     // ThinkingBlock ainda colapsado
     const linesAfter = list.render(WIDTH, HEIGHT);
     const strippedAfter = linesAfter.map(l => stripAnsi(l));
-    expect(strippedAfter.join('\n')).toContain('▶');
+    expect(strippedAfter.join('\n')).toContain('▸');
     expect(strippedAfter.join('\n')).not.toContain('Pensamento interno');
   });
 
-  test('drag real (linhas diferentes) → seleção persiste, ThinkingBlock NÃO toggled', () => {
+  test('press em linha do ThinkingBlock → toggle imediato; drag subsequente ignorado', () => {
     const list = new MessageList();
     list.addMessage({
       id: '1', role: 'assistant', content: 'Resp',
@@ -924,18 +924,21 @@ describe('MessageList — ThinkingBlock', () => {
     const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
     expect(thinkingIdx).toBeGreaterThanOrEqual(0);
 
-    // Press na linha do thinking
-    list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
-    // Drag real — move para outra linha
-    list.handleMouseDrag({ x: 5, y: thinkingIdx + 2, button: 0 });
-    // Release em linha diferente
-    const consumed = list.handleMouse({ x: 5, y: thinkingIdx + 2, button: 0, isRelease: true });
-    expect(consumed).toBe(true);
+    // Press na linha do thinking → toggle imediato (press consumido)
+    const pressConsumed = list.handleMouse({ x: 5, y: thinkingIdx + 1, button: 0, isRelease: false });
+    expect(pressConsumed).toBe(true);
 
-    // Re-render: thinking NÃO deve expandir (drag real = seleção, não clique)
+    // Drag subsequente → ignorado (press foi consumido, sem anchor registrado)
+    list.handleMouseDrag({ x: 5, y: thinkingIdx + 2, button: 0 });
+
+    // Release → não consome (sem estado de seleção)
+    const releaseConsumed = list.handleMouse({ x: 5, y: thinkingIdx + 2, button: 0, isRelease: true });
+    expect(releaseConsumed).toBe(false);
+
+    // ThinkingBlock expandido (toggle ocorreu no press)
     const linesAfter = list.render(80, 20);
     const strippedAfter = linesAfter.map(l => stripAnsi(l));
-    expect(strippedAfter.join('\n')).not.toContain('Pensamento secreto');
-    expect(strippedAfter.join('\n')).toContain('▶');
+    expect(strippedAfter.join('\n')).toContain('Pensamento secreto');
+    expect(strippedAfter.join('\n')).toContain('▼');
   });
 });
