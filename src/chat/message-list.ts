@@ -4,6 +4,7 @@ import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED, FG_YELLOW
 import { wrapText } from '../utils/wrap';
 import { padEndAnsi, byteIndexAtVisualCol, measureWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
+import { renderMarkdown } from './markdown';
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -105,7 +106,9 @@ function renderMessage(msg: ChatMessage, width: number): string[] {
       return renderToolMessage(msg, width);
   }
 
-  const contentLines = wrapText(msg.content, width);
+  const contentLines = msg.role === 'assistant'
+    ? renderMarkdown(msg.content, width)
+    : wrapText(msg.content, width);
   const separator = `${FG_GRAY}${DIM}${'-'.repeat(width)}${RESET}`;
   return [header, ...contentLines, separator];
 }

@@ -5,7 +5,7 @@ export { StatusBar } from './status-bar';
 export type { StatusMode } from './status-bar';
 export { ToolCall } from './tool-call';
 export type { ToolStatus } from './tool-call';
-export { Markdown } from './markdown';
+export { Markdown, renderMarkdown } from './markdown';
 export { CodeBlock, highlightCode } from './code-block';
 export { ChatLayout } from './chat-layout';
 export { ThinkingBlock } from './thinking-block';
