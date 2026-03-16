@@ -7,6 +7,16 @@ import { RESET, BOLD, ITALIC, DIM, UNDERLINE,
 import { wrapText } from '../utils/wrap';
 import { highlightCode } from './code-block';
 
+/**
+ * Renderiza texto markdown completo (não-streaming) e retorna linhas ANSI.
+ */
+export function renderMarkdown(text: string, width: number): string[] {
+  const md = new Markdown();
+  md.setContent(text);
+  md.finalize();
+  return md.render(width, 10000);
+}
+
 export class Markdown implements Component {
   private rawText = '';
   private isComplete = false;

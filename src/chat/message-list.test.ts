@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { MessageList } from './message-list';
 import type { ChatMessage } from './types';
 import { stripAnsi } from '../utils/strip-ansi';
+import { BOLD, FG_CYAN } from '../core/ansi';
 
 function makeMsg(id: string, role: ChatMessage['role'], content: string): ChatMessage {
   return { id, role, content, timestamp: new Date('2025-01-01T10:00:00') };
@@ -654,5 +655,39 @@ describe('MessageList — scrollbar', () => {
     const lines = list.render(40, 5);
     // scrollOffset=0 → sem hint
     expect(stripAnsi(lines[0])).not.toContain('linhas acima');
+  });
+});
+
+describe('MessageList — markdown rendering', () => {
+  test('mensagem assistant com **texto** contém BOLD no output', () => {
+    const list = new MessageList();
+    list.addMessage({ id: '1', role: 'assistant', content: '**negrito**', timestamp: new Date() });
+    const lines = list.render(80, 10);
+    const joined = lines.join('\n');
+    expect(joined).toContain(BOLD);
+    expect(stripAnsi(joined)).toContain('negrito');
+  });
+
+  test('mensagem assistant com `codigo` contém FG_CYAN no output', () => {
+    const list = new MessageList();
+    list.addMessage({ id: '1', role: 'assistant', content: 'Use `codigo`', timestamp: new Date() });
+    const lines = list.render(80, 10);
+    const joined = lines.join('\n');
+    expect(joined).toContain(FG_CYAN);
+    expect(stripAnsi(joined)).toContain('codigo');
+  });
+
+  test('mensagem user com **texto** NÃO contém BOLD (plain text preservado)', () => {
+    const list = new MessageList();
+    list.addMessage({ id: '1', role: 'user', content: '**texto**', timestamp: new Date() });
+    const lines = list.render(80, 10);
+    // Filtrar linhas de conteúdo (excluir header que tem BOLD no nome "⬥ You")
+    const contentLines = lines.filter(l => {
+      const s = stripAnsi(l);
+      return s.includes('**texto**');
+    });
+    expect(contentLines.length).toBeGreaterThan(0);
+    // A linha de conteúdo deve ter o markdown bruto, não estilizado
+    expect(stripAnsi(contentLines[0])).toContain('**texto**');
   });
 });
