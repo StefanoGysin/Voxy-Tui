@@ -2,7 +2,7 @@ import { ProcessTerminal, Renderer, RenderScheduler } from './core';
 import type { Terminal } from './core';
 import { CURSOR_HIDE, CURSOR_SHOW,
          ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING,
-         ERASE_SCREEN, cursorTo, cursorUp } from './core/ansi';
+         ERASE_SCREEN, ERASE_SCROLLBACK, cursorTo } from './core/ansi';
 import { ChatLayout } from './chat/chat-layout';
 
 export interface TUIOptions {
@@ -32,15 +32,13 @@ export class TUI {
     if (this.running) return;
     this.running = true;
 
-    const { rows } = this.terminal.getSize();
-
-    // Buffer primário: esconde cursor + mouse tracking
-    // Space reservation: '\n' × rows empurra conteúdo antigo para o scrollback limpamente,
-    // cursorUp(rows) volta ao topo da área reservada (row 1 known-good).
-    // Garante que cursorUp(N) do renderer funcione corretamente desde o primeiro frame.
+    // Buffer primário: esconde cursor + mouse tracking.
+    // ERASE_SCROLLBACK limpa o histórico do terminal → scrollbar nativa desaparece.
+    // ERASE_SCREEN + cursorTo(1,1) posiciona o cursor em (1,1) known-good para o primeiro frame
+    // (substitui o space reservation '\n'×rows que empurrava conteúdo para o scrollback).
     this.terminal.write(
-      '\r\n' + CURSOR_HIDE + ENABLE_MOUSE_TRACKING +
-      '\n'.repeat(rows) + cursorUp(rows)
+      CURSOR_HIDE + ENABLE_MOUSE_TRACKING +
+      ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1, 1)
     );
 
     this.resizeListener = () => {
@@ -59,10 +57,9 @@ export class TUI {
     this.scheduler.dispose();
     this.layout.statusBar.dispose();
 
-    // Limpar tela antes de restaurar terminal: evita que o frame atual da TUI
-    // seja empurrado para o scrollback pelo próximo start() com '\n'.repeat(rows).
-    // Desabilitar mouse tracking + restaurar cursor após limpeza.
-    this.terminal.write(ERASE_SCREEN + cursorTo(1, 1) + DISABLE_MOUSE_TRACKING + CURSOR_SHOW);
+    // Limpar tela e scrollback antes de restaurar terminal.
+    // ERASE_SCROLLBACK garante que frames da TUI não ficam no scrollback.
+    this.terminal.write(ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1, 1) + DISABLE_MOUSE_TRACKING + CURSOR_SHOW);
 
     if (this.resizeListener) {
       process.stdout.removeListener('resize', this.resizeListener);

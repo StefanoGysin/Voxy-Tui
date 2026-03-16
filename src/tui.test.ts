@@ -74,23 +74,26 @@ describe('TUI', () => {
     expect(term.getOutput()).toContain('\x1b[?1002l');
   });
 
-  it('start() reserva espaço: emite \\n × rows + cursorUp(rows) antes do primeiro render', () => {
+  it('start() emite ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1,1)', () => {
     const term = new MockTerminal(80, 24);
     tui = new TUI({ terminal: term });
     tui.start();
     const output = term.getOutput();
-    // 24 newlines consecutivos = reserva de espaço (rows = 24)
-    expect(output).toContain('\n'.repeat(24));
-    // cursorUp(24) para voltar ao topo da área reservada
-    expect(output).toContain('\x1b[24A');
+    // ERASE_SCROLLBACK (\x1b[3J) limpa scrollback → sem scrollbar nativa
+    expect(output).toContain('\x1b[3J');
+    // ERASE_SCREEN (\x1b[2J) limpa tela visível
+    expect(output).toContain('\x1b[2J');
+    // cursorTo(1,1)
+    expect(output).toContain('\x1b[1;1H');
   });
 
-  it('stop() emite ERASE_SCREEN + cursorTo(1,1) para evitar ghost text no próximo start()', () => {
+  it('stop() emite ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1,1)', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });
     tui.start();
     term.reset();
     tui.stop();
+    expect(term.getOutput()).toContain('\x1b[3J');    // ERASE_SCROLLBACK
     expect(term.getOutput()).toContain('\x1b[2J');    // ERASE_SCREEN
     expect(term.getOutput()).toContain('\x1b[1;1H'); // cursorTo(1, 1)
   });
