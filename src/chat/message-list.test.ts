@@ -856,6 +856,62 @@ describe('MessageList — ThinkingBlock', () => {
     expect(consumed).toBe(false);
   });
 
+  test('thinkingLineMap: click no header do ThinkingBlock (coordenadas via render) faz toggle', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resp',
+      timestamp: new Date(), thinkingContent: 'Pensamento interno',
+    });
+    const WIDTH = 80, HEIGHT = 20;
+    // render() constrói thinkingLineMap com coordenadas consistentes
+    const lines = list.render(WIDTH, HEIGHT);
+    const stripped = lines.map(l => stripAnsi(l));
+
+    const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
+    expect(thinkingIdx).toBeGreaterThanOrEqual(0);
+
+    // screenY é 1-based
+    const screenY = thinkingIdx + 1;
+    list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: true });
+    expect(consumed).toBe(true);
+
+    // Verificar: expandido (▼ visível, conteúdo visível)
+    const linesAfter = list.render(WIDTH, HEIGHT);
+    const strippedAfter = linesAfter.map(l => stripAnsi(l));
+    expect(strippedAfter.join('\n')).toContain('▼');
+    expect(strippedAfter.join('\n')).toContain('Pensamento interno');
+  });
+
+  test('thinkingLineMap: click na linha do header da msg (acima do ThinkingBlock) NÃO faz toggle', () => {
+    const list = new MessageList();
+    list.addMessage({
+      id: '1', role: 'assistant', content: 'Resp',
+      timestamp: new Date(), thinkingContent: 'Pensamento interno',
+    });
+    const WIDTH = 80, HEIGHT = 20;
+    const lines = list.render(WIDTH, HEIGHT);
+    const stripped = lines.map(l => stripAnsi(l));
+
+    // Header da msg (✦ Assistant) está ANTES do ThinkingBlock
+    const assistantIdx = stripped.findIndex(l => l.includes('✦ Assistant'));
+    const thinkingIdx = stripped.findIndex(l => l.includes('Chain of thought'));
+    expect(assistantIdx).toBeGreaterThanOrEqual(0);
+    expect(assistantIdx).toBeLessThan(thinkingIdx);
+
+    // Clicar no header da msg → NÃO deve fazer toggle do ThinkingBlock
+    const screenY = assistantIdx + 1;
+    list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: false });
+    const consumed = list.handleMouse({ x: 5, y: screenY, button: 0, isRelease: true });
+    expect(consumed).toBe(false);
+
+    // ThinkingBlock ainda colapsado
+    const linesAfter = list.render(WIDTH, HEIGHT);
+    const strippedAfter = linesAfter.map(l => stripAnsi(l));
+    expect(strippedAfter.join('\n')).toContain('▶');
+    expect(strippedAfter.join('\n')).not.toContain('Pensamento interno');
+  });
+
   test('drag real (linhas diferentes) → seleção persiste, ThinkingBlock NÃO toggled', () => {
     const list = new MessageList();
     list.addMessage({
