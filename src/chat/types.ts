@@ -5,6 +5,8 @@ export interface ChatMessage {
   role: MessageRole;
   content: string;
   timestamp: Date;
+  // Campo presente quando role === 'assistant' e há chain-of-thought
+  thinkingContent?: string;
   // Campos presentes apenas quando role === 'tool'
   toolName?: string;
   toolInput?: string;

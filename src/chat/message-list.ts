@@ -5,6 +5,7 @@ import { wrapText } from '../utils/wrap';
 import { padEndAnsi, byteIndexAtVisualCol, measureWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 import { renderMarkdown } from './markdown';
+import { ThinkingBlock } from './thinking-block';
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -88,7 +89,7 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
   return lines;
 }
 
-function renderMessage(msg: ChatMessage, width: number): string[] {
+function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: ThinkingBlock): string[] {
   let header: string;
   const time = `${FG_GRAY}${DIM}${formatTime(msg.timestamp)}${RESET}`;
 
@@ -106,11 +107,12 @@ function renderMessage(msg: ChatMessage, width: number): string[] {
       return renderToolMessage(msg, width);
   }
 
+  const thinkingLines = thinkingBlock ? thinkingBlock.render(width, 10000) : [];
   const contentLines = msg.role === 'assistant'
     ? renderMarkdown(msg.content, width)
     : wrapText(msg.content, width);
   const separator = `${FG_GRAY}${DIM}${'-'.repeat(width)}${RESET}`;
-  return [header, ...contentLines, separator];
+  return [header, ...thinkingLines, ...contentLines, separator];
 }
 
 export class MessageList implements Component {
@@ -137,8 +139,25 @@ export class MessageList implements Component {
   private isScrollbarDrag            = false;
   private scrollbarDragHandleOffset  = 0;
 
+  // ThinkingBlock instances (persiste collapsed state por mensagem)
+  private thinkingBlocks = new Map<ChatMessage, ThinkingBlock>();
+
   /** Callback chamado quando o usuário finaliza uma seleção. Recebe o texto selecionado. */
   onTextCopied?: (text: string) => void;
+
+  /** Renderiza uma mensagem, passando o ThinkingBlock associado (se houver). */
+  private renderMsg(msg: ChatMessage, width: number): string[] {
+    let block: ThinkingBlock | undefined;
+    if (msg.thinkingContent) {
+      block = this.thinkingBlocks.get(msg);
+      if (!block) {
+        block = new ThinkingBlock();
+        this.thinkingBlocks.set(msg, block);
+      }
+      block.setContent(msg.thinkingContent);
+    }
+    return renderMessage(msg, width, block);
+  }
 
   /**
    * Retorna true se há uma seleção ativa (durante drag ou após release com highlight).
@@ -277,7 +296,7 @@ export class MessageList implements Component {
     const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
     const allLines: string[] = []
     for (const msg of this.messages) {
-      allLines.push(...renderMessage(msg, textWidth))
+      allLines.push(...this.renderMsg(msg, textWidth))
     }
     const total = allLines.length
 
@@ -468,7 +487,7 @@ export class MessageList implements Component {
     const msgStartMap = new Map<ChatMessage, number>()
     for (const msg of this.messages) {
       msgStartMap.set(msg, lineToMsg.length)
-      const msgLines = renderMessage(msg, textWidth)
+      const msgLines = this.renderMsg(msg, textWidth)
       for (let i = 0; i < msgLines.length; i++) {
         lineToMsg.push(msg)
       }
@@ -479,15 +498,27 @@ export class MessageList implements Component {
 
     if (allLineIdx < 0 || allLineIdx >= total) return false
     const msg = lineToMsg[allLineIdx]
-    if (!msg || msg.role !== 'tool') return false
+    if (!msg) return false
+
+    // === Click no header do ThinkingBlock → toggle ===
+    if (msg.role === 'assistant' && msg.thinkingContent) {
+      const msgStart = msgStartMap.get(msg)
+      if (msgStart !== undefined && allLineIdx === msgStart + 1) {
+        const block = this.thinkingBlocks.get(msg)
+        if (block) { block.toggle(); return true }
+      }
+    }
+
+    // === Click em tool message truncado → toggle collapsed ===
+    if (msg.role !== 'tool') return false
     if ((msg.toolOutput?.length ?? 0) <= TOOL_COLLAPSED_OUTPUT_LINES) return false
 
     const wasCollapsed = msg.toolCollapsed !== false
-    const oldLen = renderMessage(msg, textWidth).length
+    const oldLen = this.renderMsg(msg, textWidth).length
 
     msg.toolCollapsed = !msg.toolCollapsed
 
-    const newLen = renderMessage(msg, textWidth).length
+    const newLen = this.renderMsg(msg, textWidth).length
     const lineDelta = newLen - oldLen
     const totalAfter = total + lineDelta
     const msgStart = msgStartMap.get(msg) ?? 0
@@ -557,6 +588,7 @@ export class MessageList implements Component {
     this.messages     = []
     this.scrollOffset = 0
     this.stickyBottom = true
+    this.thinkingBlocks.clear()
     this.clearSelectionState()
   }
 
@@ -592,7 +624,7 @@ export class MessageList implements Component {
     const allLines: string[] = [];
     const allLineBorders: string[] = [];
     for (const msg of this.messages) {
-      const msgLines = renderMessage(msg, textWidth);
+      const msgLines = this.renderMsg(msg, textWidth);
       const borderChar = getMsgBorderAnsi(msg.role);
       for (const line of msgLines) {
         allLines.push(line);
