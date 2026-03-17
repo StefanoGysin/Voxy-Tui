@@ -7,3 +7,5 @@ export { Dropdown } from './dropdown';
 export type { DropdownOption, DropdownOptions } from './dropdown';
 export { Dialog } from './dialog';
 export type { DialogConfig } from './dialog';
+export { Toast } from './toast';
+export type { ToastOptions, ToastType } from './toast';
