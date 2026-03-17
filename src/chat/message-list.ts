@@ -471,6 +471,12 @@ export class MessageList implements Component {
         }
       }
 
+      // Se há seleção ativa (highlight persistido), limpar e consumir — NÃO iniciar nova seleção
+      if (this.selFinalized) {
+        this.clearSelectionState()
+        return true  // consome o evento, força re-render
+      }
+
       // Seleção de texto: registrar âncora
       this.clearSelectionState();
       this.lastDragScreenY = event.y;
