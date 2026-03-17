@@ -109,7 +109,9 @@ input.onChange?: (text: string) => void
 // — padding de linhas vazias no topo se conteúdo < height
 // — slice se conteúdo > height (com scrollOffset)
 // — textWidth = width - MARGIN_LEFT (sem scrollbar — buffer primário)
-// ChatLayout distribui: messagesHeight + inputHeight + statusHeight = height
+// ChatLayout distribui: messagesHeight + activityHeight + toastHeight + inputHeight + statusHeight = height
+// setActivityLog(log: ToolActivityLog | null): void — slot entre messages e toast
+// setToast(toast: Toast | null): void — slot entre activity e input (0-3 linhas)
 ```
 
 ### StreamingThinkingIndicator
@@ -241,7 +243,7 @@ padEndAnsi(line: string, targetWidth: number): string
 | **33 — Ghost Text Fix** | `feat/session-33-ghost-text-fix` | ✅ merged | 323 |
 | **34 — Ghost Text Fix II** | `fix/session-34-ghost-text-scroll` | ✅ merged | 321 |
 | **35B — ThinkingBlock Fixes** | `feat/session-35b-thinking-block-fixes` | ✅ merged | 356 |
-| **36 — Toast Notification** | `feat/session-36-toast` | 🔄 em progresso | — |
+| **36 — Toast Notification** | `feat/session-36-toast` | 🔄 em progresso | 32 |
 | 11 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado

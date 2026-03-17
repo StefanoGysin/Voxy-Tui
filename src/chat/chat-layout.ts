@@ -3,6 +3,7 @@ import { MessageList } from './message-list';
 import { InputBar } from './input-bar';
 import { StatusBar } from './status-bar';
 import type { ToolActivityLog } from './tool-activity-log';
+import type { Toast } from '../components/toast';
 
 const SCROLL_LINES = 3;   // mouse wheel: linhas por evento
 const PAGE_LINES   = 10;  // pageup/pagedown: linhas por evento
@@ -13,6 +14,7 @@ export class ChatLayout implements Component {
   readonly inputBar: InputBar;
   readonly statusBar: StatusBar;
   private activityLog: ToolActivityLog | null = null;
+  private toastComponent: Toast | null = null;
   private lastScrollAt = 0;
   private lastMessagesHeight = 0;
 
@@ -30,21 +32,33 @@ export class ChatLayout implements Component {
     this.activityLog = log;
   }
 
+  /**
+   * Define o Toast a ser renderizado entre activityLog e inputBar.
+   * Passe null para ocultar.
+   */
+  setToast(toast: Toast | null): void {
+    this.toastComponent = toast;
+  }
+
   render(width: number, height: number): string[] {
     const statusHeight = 1;
     const inputHeight = Math.max(this.inputBar.minHeight(), 2);
     const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
-    const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight);
+    const toastHeight = this.toastComponent?.visibleLineCount() ?? 0;
+    const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight - toastHeight);
     this.lastMessagesHeight = messagesHeight;
 
     const messageLines = this.messageList.render(width, messagesHeight);
     const activityLines = activityHeight > 0
       ? this.activityLog!.render(width, activityHeight)
       : [];
+    const toastLines = toastHeight > 0
+      ? this.toastComponent!.render(width, toastHeight)
+      : [];
     const inputLines = this.inputBar.render(width, inputHeight);
     const statusLines = this.statusBar.render(width, statusHeight);
 
-    return [...messageLines, ...activityLines, ...inputLines, ...statusLines];
+    return [...messageLines, ...activityLines, ...toastLines, ...inputLines, ...statusLines];
   }
 
   /**
@@ -100,6 +114,7 @@ export class ChatLayout implements Component {
 
   minHeight(): number {
     const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
-    return this.inputBar.minHeight() + this.statusBar.minHeight() + 3 + activityHeight;
+    const toastHeight = this.toastComponent?.visibleLineCount() ?? 0;
+    return this.inputBar.minHeight() + this.statusBar.minHeight() + 3 + activityHeight + toastHeight;
   }
 }
