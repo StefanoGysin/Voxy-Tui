@@ -1,6 +1,7 @@
 import { describe, test, expect, afterEach, beforeEach, jest } from 'bun:test';
 import { ChatLayout } from './chat-layout';
 import { ToolActivityLog } from './tool-activity-log';
+import { Toast } from '../components/toast';
 import { stripAnsi } from '../utils/strip-ansi';
 import type { ChatMessage } from './types';
 
@@ -215,5 +216,100 @@ describe('ChatLayout — handleMouse', () => {
     layout.render(80, 30);
     const result = layout.handleMouseDrag({ x: 5, y: 30, button: 0 });
     expect(result).toBe(false);
+  });
+});
+
+describe('ChatLayout — toast', () => {
+  let layout: ChatLayout;
+  let toast: Toast;
+
+  beforeEach(() => {
+    layout = new ChatLayout();
+    toast = new Toast();
+  });
+
+  afterEach(() => {
+    layout.statusBar.dispose();
+    toast.dispose();
+  });
+
+  test('render retorna exatamente height linhas com toast vazio', () => {
+    layout.setToast(toast);
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('render retorna exatamente height linhas com toast ativo (1 entry)', () => {
+    layout.setToast(toast);
+    toast.show({ type: 'mode', label: 'Autopilot', duration: 0 });
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('render retorna exatamente height linhas com toast ativo (3 entries)', () => {
+    layout.setToast(toast);
+    toast.show({ type: 'mode', label: 'A', duration: 0 });
+    toast.show({ type: 'success', label: 'B', duration: 0 });
+    toast.show({ type: 'info', label: 'C', duration: 0 });
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('linhas do toast aparecem entre activityLog e inputBar', () => {
+    const toolLog = new ToolActivityLog();
+    layout.setActivityLog(toolLog);
+    layout.setToast(toast);
+    toolLog.addTool('1', 'bash', 'bun test');
+    toolLog.updateTool('1', 'done');
+    toast.show({ type: 'mode', label: 'Autopilot', duration: 0 });
+    const lines = layout.render(80, 20).map((l: string) => stripAnsi(l));
+
+    // find activity line
+    const activityIdx = lines.findIndex(l => l.includes('bash'));
+    // find toast line
+    const toastIdx = lines.findIndex(l => l.includes('Autopilot'));
+    // find inputBar separator
+    let separatorIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].includes('─')) { separatorIdx = i; break; }
+    }
+
+    expect(activityIdx).toBeGreaterThanOrEqual(0);
+    expect(toastIdx).toBeGreaterThan(activityIdx);
+    expect(toastIdx).toBeLessThan(separatorIdx);
+
+    toolLog.dispose();
+  });
+
+  test('setToast(null) remove o toast e render volta ao normal', () => {
+    layout.setToast(toast);
+    toast.show({ type: 'mode', label: 'Test', duration: 0 });
+    layout.setToast(null);
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+    const hasToast = lines.some(l => l.includes('Test'));
+    expect(hasToast).toBe(false);
+  });
+
+  test('minHeight cresce com toast ativo', () => {
+    const baseHeight = layout.minHeight();
+    layout.setToast(toast);
+    toast.show({ type: 'info', label: 'X', duration: 0 });
+    expect(layout.minHeight()).toBe(baseHeight + 1);
+  });
+
+  test('toast e activityLog coexistem corretamente', () => {
+    const toolLog = new ToolActivityLog();
+    layout.setActivityLog(toolLog);
+    layout.setToast(toast);
+    toolLog.addTool('1', 'bash');
+    toast.show({ type: 'mode', label: 'Mode', duration: 0 });
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+    const stripped = lines.map(l => stripAnsi(l));
+    expect(stripped.some(l => l.includes('bash'))).toBe(true);
+    expect(stripped.some(l => l.includes('Mode'))).toBe(true);
+
+    toolLog.dispose();
   });
 });
