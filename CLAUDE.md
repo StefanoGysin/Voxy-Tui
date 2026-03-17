@@ -184,6 +184,21 @@ block.toggle(): void
 // Toggle via click ocorre no PRESS (não no release) — evita falha com drag events espúrios do Windows Terminal
 ```
 
+### Toast
+```typescript
+new Toast()
+toast.show(options: ToastOptions): string     // retorna ID, adiciona à fila (máx 3 FIFO)
+toast.dismiss(id?: string): void              // remove por ID ou o mais antigo
+toast.clear(): void                           // remove todos, limpa timers
+toast.dispose(): void                         // alias de clear()
+toast.count(): number
+toast.visibleLineCount(): number
+toast.onUpdate?: () => void
+// ToastType: 'info' | 'success' | 'warning' | 'error' | 'mode'
+// Cada toast usa setTimeout individual (one-shot), default 3000ms. duration=0 = sem auto-dismiss.
+// render() retorna [] quando vazio, 1 linha por toast quando ativo (máx 3)
+```
+
 ### `padEndAnsi` (novo utilitário)
 ```typescript
 import { padEndAnsi } from 'voxy-tui';
@@ -226,6 +241,7 @@ padEndAnsi(line: string, targetWidth: number): string
 | **33 — Ghost Text Fix** | `feat/session-33-ghost-text-fix` | ✅ merged | 323 |
 | **34 — Ghost Text Fix II** | `fix/session-34-ghost-text-scroll` | ✅ merged | 321 |
 | **35B — ThinkingBlock Fixes** | `feat/session-35b-thinking-block-fixes` | ✅ merged | 356 |
+| **36 — Toast Notification** | `feat/session-36-toast` | 🔄 em progresso | — |
 | 11 — TBD | — | ⏳ | — |
 
 ### Sessão 7 — escopo planejado
@@ -259,6 +275,7 @@ src/
 │   ├── text-input.ts    — MultilineEditor completo (undo, kill ring, Emacs)
 │   ├── border.ts        — Border single/double/rounded
 │   ├── scrollable.ts    — PLACEHOLDER
+│   ├── toast.ts         — Toast notification (tag compacta, auto-dismiss, FIFO)
 │   └── index.ts
 ├── layout/
 │   ├── stack.ts         — Stack vertical + horizontal
