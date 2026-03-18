@@ -438,6 +438,32 @@ describe('MessageList — drag selection', () => {
     expect(list.render(40, 10).some(l => l.includes('\x1b[44m'))).toBe(false);
   });
 
+  test('left click limpa seleção finalizada e consome o evento', () => {
+    const list = new MessageList();
+    for (let i = 0; i < 5; i++) {
+      list.addMessage({ id: `u${i}`, role: 'user', content: `mensagem ${i}`, timestamp: new Date() });
+    }
+    list.onTextCopied = () => {};
+    list.render(40, 10);
+
+    // Criar seleção finalizada: press → drag → release
+    list.handleMouse({ x: 1, y: 8, button: 0, isRelease: false });
+    list.handleMouseDrag({ x: 1, y: 7, button: 0 });
+    list.handleMouse({ x: 1, y: 7, button: 0, isRelease: true });
+
+    // Confirmar seleção ativa
+    expect(list.isSelectionActive()).toBe(true);
+
+    // Novo LEFT PRESS → deve limpar seleção e consumir
+    const consumed = list.handleMouse({ x: 5, y: 5, button: 0, isRelease: false });
+    expect(consumed).toBe(true);
+    expect(list.isSelectionActive()).toBe(false);
+
+    // Re-render: sem highlight
+    const lines = list.render(40, 10);
+    expect(lines.some(l => l.includes('\x1b[44m'))).toBe(false);
+  });
+
   test('scroll durante drag estende selCurrentIdx (updateSelOnScroll)', () => {
     const list = new MessageList();
     // Adicionar conteúdo suficiente para overflow
