@@ -42,7 +42,7 @@ export class Renderer {
     if (firstDiff === -1) return;
 
     // 5. Calcular quantas linhas subir a partir do fim do render anterior
-    const linesToMoveUp = this.previousLines.length - firstDiff;
+    const linesToMoveUp = this.previousLines.length - firstDiff - 1;
 
     // 6. Construir output em buffer — single write ao final
     let output = SYNC_START;
