@@ -109,9 +109,13 @@ input.onChange?: (text: string) => void
 // — padding de linhas vazias no topo se conteúdo < height
 // — slice se conteúdo > height (com scrollOffset)
 // — textWidth = width - MARGIN_LEFT (sem scrollbar — buffer primário)
-// ChatLayout distribui: messagesHeight + activityHeight + toastHeight + inputHeight + statusHeight = height
+// ChatLayout distribui: messagesHeight + activityHeight + toastHeight + permHeight + inputHeight + statusHeight = height
+// Ordem de render: messages → activity → toast → permission dialog → input → status
 // setActivityLog(log: ToolActivityLog | null): void — slot entre messages e toast
-// setToast(toast: Toast | null): void — slot entre activity e input (0-3 linhas)
+// setToast(toast: Toast | null): void — slot entre activity e permission (0-3 linhas)
+// setPermissionDialog(slot: PermissionDialogSlot | null): void — slot entre toast e input
+// PermissionDialogSlot: { render(width): string[], handleKey(event): boolean, lineCount(): number }
+// Quando ativo (lineCount > 0), handleKey delega ao slot com prioridade sobre scroll e inputBar
 ```
 
 ### StreamingThinkingIndicator
