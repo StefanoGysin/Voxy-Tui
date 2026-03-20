@@ -7,6 +7,19 @@ import type { ToolActivityLog } from './tool-activity-log';
 import type { Toast } from '../components/toast';
 import { fitWidth } from '../utils/width';
 
+/**
+ * Interface para o slot de permission dialog inline.
+ * O ChatLayout chama render() para obter as linhas e handleKey() para delegar input.
+ */
+export interface PermissionDialogSlot {
+  /** Renderiza o dialog com a largura dada. Retorna linhas (pode ser 0 se inativo). */
+  render(width: number): string[];
+  /** Processa tecla. Retorna true se consumiu o evento. */
+  handleKey(event: KeyEvent): boolean;
+  /** Número de linhas que o dialog ocupa agora (0 = inativo). */
+  lineCount(): number;
+}
+
 const SCROLL_LINES = 3;   // mouse wheel: linhas por evento
 const PAGE_LINES   = 10;  // pageup/pagedown: linhas por evento
 const SCROLL_THROTTLE_MS = 16; // throttle de mouse scroll (~60fps)
@@ -18,6 +31,7 @@ export class ChatLayout implements Component {
   private activityLog: ToolActivityLog | null = null;
   private toastComponent: Toast | null = null;
   private sidebarComponent: Sidebar | null = null;
+  private permissionSlot: PermissionDialogSlot | null = null;
   private sidebarFocused = false;
   private lastScrollAt = 0;
   private lastMessagesHeight = 0;
@@ -44,6 +58,14 @@ export class ChatLayout implements Component {
    */
   setToast(toast: Toast | null): void {
     this.toastComponent = toast;
+  }
+
+  /**
+   * Define o PermissionDialogSlot a ser renderizado entre toast e inputBar.
+   * Passe null para remover.
+   */
+  setPermissionDialog(slot: PermissionDialogSlot | null): void {
+    this.permissionSlot = slot;
   }
 
   /**
@@ -92,7 +114,9 @@ export class ChatLayout implements Component {
     const inputHeight = Math.max(this.inputBar.minHeight(), 2);
     const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
     const toastHeight = this.toastComponent?.visibleLineCount() ?? 0;
-    const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight - toastHeight);
+    const permLines = this.permissionSlot ? this.permissionSlot.render(chatWidth) : [];
+    const permHeight = permLines.length;
+    const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight - toastHeight - permHeight);
     this.lastMessagesHeight = messagesHeight;
 
     const messageLines = this.messageList.render(chatWidth, messagesHeight);
@@ -105,7 +129,7 @@ export class ChatLayout implements Component {
     const inputLines = this.inputBar.render(chatWidth, inputHeight);
     const statusLines = this.statusBar.render(chatWidth, statusHeight);
 
-    const chatLines = [...messageLines, ...activityLines, ...toastLines, ...inputLines, ...statusLines];
+    const chatLines = [...messageLines, ...activityLines, ...toastLines, ...permLines, ...inputLines, ...statusLines];
 
     // Se sem sidebar, retornar chat direto
     if (sidebarWidth === 0 || !this.sidebarComponent) {
@@ -188,6 +212,11 @@ export class ChatLayout implements Component {
       return this.sidebarComponent!.handleKey(event);
     }
 
+    // === Permission dialog tem prioridade quando ativo ===
+    if (this.permissionSlot && this.permissionSlot.lineCount() > 0) {
+      return this.permissionSlot.handleKey(event);
+    }
+
     // === Bloquear Enter enquanto seleção de texto ativa (evitar envio acidental) ===
     if (key === 'return' && this.messageList.isSelectionActive()) {
       return true   // consume: não enviar ao InputBar
@@ -217,6 +246,7 @@ export class ChatLayout implements Component {
   minHeight(): number {
     const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
     const toastHeight = this.toastComponent?.visibleLineCount() ?? 0;
-    return this.inputBar.minHeight() + this.statusBar.minHeight() + 3 + activityHeight + toastHeight;
+    const permHeight = this.permissionSlot?.lineCount() ?? 0;
+    return this.inputBar.minHeight() + this.statusBar.minHeight() + 3 + activityHeight + toastHeight + permHeight;
   }
 }
