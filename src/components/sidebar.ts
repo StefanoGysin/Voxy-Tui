@@ -1,5 +1,6 @@
 import type { Component, KeyEvent, MouseClickEvent } from '../core/component';
-import { RESET, BOLD, DIM, bg, fg } from '../core/ansi';
+import { RESET, BOLD, DIM } from '../core/ansi';
+import { theme } from '../core/theme';
 import { padEndAnsi } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 import { measureWidth } from '../utils/width';
@@ -74,13 +75,13 @@ export class Sidebar implements Component {
   onUpdate?: () => void;
 
   constructor(options?: SidebarOptions) {
-    this.borderFg = options?.borderFg ?? fg(40, 55, 70);
-    this.headerBg = options?.headerBg ?? bg(15, 20, 30);
-    this.titleFg = options?.titleFg ?? fg(224, 242, 254);
-    this.tabActiveFg = options?.tabActiveFg ?? fg(34, 211, 238);
-    this.tabInactiveFg = options?.tabInactiveFg ?? fg(126, 143, 160);
-    this.hintsFg = options?.hintsFg ?? fg(61, 90, 110);
-    this.bgColor = options?.bgColor ?? bg(12, 16, 26);
+    this.borderFg = options?.borderFg ?? theme.borderFg;
+    this.headerBg = options?.headerBg ?? theme.panelHeaderBg;
+    this.titleFg = options?.titleFg ?? theme.titleFg;
+    this.tabActiveFg = options?.tabActiveFg ?? theme.selectedFg;
+    this.tabInactiveFg = options?.tabInactiveFg ?? theme.textDim;
+    this.hintsFg = options?.hintsFg ?? theme.hintsFg;
+    this.bgColor = options?.bgColor ?? theme.panelBg;
     this.title = options?.title ?? 'Configurações';
     this.closeHint = options?.closeHint ?? 'Ctrl+B';
   }
