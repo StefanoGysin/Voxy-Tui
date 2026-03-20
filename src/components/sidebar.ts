@@ -173,8 +173,7 @@ export class Sidebar implements Component {
     }
 
     // 8. Adicionar borda │ esquerda a cada linha
-    const border = `${this.borderFg}${BORDER_CHAR}${RESET}`;
-    return lines.map(line => `${border}${line}`);
+    return lines.map(line => `${this.bgColor}${this.borderFg}${BORDER_CHAR}${line}${RESET}`);
   }
 
   handleKey(event: KeyEvent): boolean {
@@ -261,13 +260,14 @@ export class Sidebar implements Component {
   // --- Private render helpers ---
 
   private renderHeader(innerWidth: number): string {
-    const icon = '⚙';
-    const left = ` ${icon} ${this.titleFg}${BOLD}${this.title}${RESET}`;
+    const left = ` ${this.titleFg}${BOLD}${this.title}${RESET}`;
     const right = `${this.hintsFg}${this.closeHint}${RESET} `;
     const leftVisual = measureWidth(stripAnsi(left));
     const rightVisual = measureWidth(stripAnsi(right));
     const gap = Math.max(1, innerWidth - leftVisual - rightVisual);
-    const line = `${this.headerBg}${left}${' '.repeat(gap)}${right}${RESET}`;
+    const bgLeft = left.replaceAll(RESET, RESET + this.headerBg);
+    const bgRight = right.replaceAll(RESET, RESET + this.headerBg);
+    const line = `${this.headerBg}${bgLeft}${' '.repeat(gap)}${bgRight}${RESET}`;
     return padEndAnsi(line, innerWidth);
   }
 
@@ -303,7 +303,9 @@ export class Sidebar implements Component {
       }
     }
 
-    return padEndAnsi(`${this.bgColor} ${tabsStr}`, innerWidth);
+    // Re-apply bgColor after every RESET in tab labels
+    const bgTabs = tabsStr.replaceAll(RESET, RESET + this.bgColor);
+    return padEndAnsi(`${this.bgColor} ${bgTabs}`, innerWidth);
   }
 
   private renderContent(
@@ -327,9 +329,11 @@ export class Sidebar implements Component {
     );
 
     const pad = ' '.repeat(CONTENT_PAD);
-    const result = visible.map(line =>
-      padEndAnsi(`${this.bgColor}${pad}${line}${RESET}`, innerWidth),
-    );
+    const result = visible.map(line => {
+      // Re-apply bgColor after every RESET in content to prevent bg bleed-through
+      const bgLine = line.replaceAll(RESET, RESET + this.bgColor);
+      return padEndAnsi(`${this.bgColor}${pad}${bgLine}`, innerWidth);
+    });
 
     // Preencher restante
     while (result.length < contentHeight) {
@@ -355,8 +359,10 @@ export class Sidebar implements Component {
     const activeTab = this.tabs[this.activeTabIndex];
     const hints = activeTab?.getHints() ?? '';
     const truncatedHints = truncate(hints, Math.max(0, innerWidth - 4));
+    // Re-apply bgColor after every RESET in hints
+    const bgHints = truncatedHints.replaceAll(RESET, RESET + this.bgColor);
     return padEndAnsi(
-      `${this.bgColor} ${this.hintsFg}${truncatedHints}${RESET}`,
+      `${this.bgColor} ${this.hintsFg}${bgHints}${RESET}`,
       innerWidth,
     );
   }
