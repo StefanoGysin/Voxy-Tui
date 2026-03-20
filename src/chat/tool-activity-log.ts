@@ -4,6 +4,8 @@ import { BRAILLE_FRAMES, FRAME_INTERVAL_MS } from '../components/spinner';
 import { truncate } from '../utils/truncate';
 import type { ToolStatus } from './tool-call';
 
+const REMOVE_DELAY_MS = 2000;
+
 interface ToolEntry {
   id: string;
   name: string;
@@ -34,6 +36,14 @@ export class ToolActivityLog implements Component {
    * @param label  Descrição curta (ex: path do arquivo, comando)
    */
   addTool(id: string, name: string, label = ''): void {
+    const existing = this.entries.find(e => e.id === id);
+    if (existing) {
+      existing.name = name;
+      existing.label = label;
+      existing.status = 'running';
+      this.ensureTimer();
+      return;
+    }
     this.entries.push({ id, name, label, status: 'running' });
     this.ensureTimer();
   }
@@ -49,6 +59,16 @@ export class ToolActivityLog implements Component {
     if (label !== undefined) entry.label = label;
     if (!this.entries.some(e => e.status === 'running')) {
       this.stopTimer();
+    }
+    if (status === 'done' || status === 'error') {
+      setTimeout(() => {
+        const idx = this.entries.findIndex(e => e.id === id);
+        if (idx !== -1) this.entries.splice(idx, 1);
+        if (!this.entries.some(e => e.status === 'running')) {
+          this.stopTimer();
+        }
+        this.onUpdate?.();
+      }, REMOVE_DELAY_MS);
     }
   }
 

@@ -2,6 +2,8 @@ import { describe, it, expect, afterEach, beforeEach, jest } from 'bun:test';
 import { ToolActivityLog } from './tool-activity-log';
 import { FRAME_INTERVAL_MS } from '../components/spinner';
 
+const REMOVE_DELAY_MS = 2000;
+
 describe('ToolActivityLog', () => {
   let log: ToolActivityLog;
 
@@ -89,6 +91,71 @@ describe('ToolActivityLog', () => {
     log.addTool('1', 'read_file', 'src/old.ts');
     log.updateTool('1', 'done', 'src/new.ts');
     expect(log.render(80, 24)[0]).toContain('src/new.ts');
+  });
+
+  describe('deduplicação por ID', () => {
+    it('addTool com ID duplicado não cria entry nova', () => {
+      log.addTool('1', 'read_file', 'src/old.ts');
+      log.addTool('1', 'bash', 'bun test');
+      expect(log.render(80, 24)).toHaveLength(1);
+      const line = log.render(80, 24)[0];
+      expect(line).toContain('bash');
+      expect(line).toContain('bun test');
+    });
+
+    it('addTool com ID duplicado reseta status para running', () => {
+      log.addTool('1', 'read_file');
+      log.updateTool('1', 'done');
+      log.addTool('1', 'read_file', 'retry');
+      expect(log.render(80, 24)[0]).not.toContain('✓');
+    });
+  });
+
+  describe('remoção automática após done/error', () => {
+    it('entry done é removida após REMOVE_DELAY_MS', () => {
+      log.addTool('1', 'read_file');
+      log.updateTool('1', 'done');
+      // Ainda visível antes do delay
+      expect(log.render(80, 24)).toHaveLength(1);
+      jest.advanceTimersByTime(REMOVE_DELAY_MS);
+      expect(log.render(80, 24)).toHaveLength(0);
+    });
+
+    it('entry error é removida após REMOVE_DELAY_MS', () => {
+      log.addTool('1', 'bash');
+      log.updateTool('1', 'error');
+      expect(log.render(80, 24)).toHaveLength(1);
+      jest.advanceTimersByTime(REMOVE_DELAY_MS);
+      expect(log.render(80, 24)).toHaveLength(0);
+    });
+
+    it('onUpdate é chamado após remoção', () => {
+      const cb = jest.fn();
+      log.onUpdate = cb;
+      log.addTool('1', 'read_file');
+      cb.mockClear();
+      log.updateTool('1', 'done');
+      jest.advanceTimersByTime(REMOVE_DELAY_MS);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('visibleLineCount() retorna 0 após todas entries removidas', () => {
+      log.addTool('1', 'read_file');
+      log.addTool('2', 'bash');
+      log.updateTool('1', 'done');
+      log.updateTool('2', 'done');
+      jest.advanceTimersByTime(REMOVE_DELAY_MS);
+      expect(log.visibleLineCount()).toBe(0);
+    });
+
+    it('entry running não é removida', () => {
+      log.addTool('1', 'read_file');
+      log.addTool('2', 'bash');
+      log.updateTool('1', 'done');
+      jest.advanceTimersByTime(REMOVE_DELAY_MS);
+      expect(log.render(80, 24)).toHaveLength(1);
+      expect(log.render(80, 24)[0]).toContain('bash');
+    });
   });
 
   it('onUpdate() é chamado a cada frame enquanto há running', () => {
