@@ -2,7 +2,8 @@ import { ProcessTerminal, Renderer, RenderScheduler } from './core';
 import type { Terminal } from './core';
 import { CURSOR_HIDE, CURSOR_SHOW,
          ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING,
-         ERASE_SCREEN, ERASE_SCROLLBACK, cursorTo } from './core/ansi';
+         ERASE_SCREEN, cursorTo,
+         ENTER_ALT_SCREEN, EXIT_ALT_SCREEN } from './core/ansi';
 import { ChatLayout } from './chat/chat-layout';
 
 export interface TUIOptions {
@@ -32,13 +33,12 @@ export class TUI {
     if (this.running) return;
     this.running = true;
 
-    // Buffer primário: esconde cursor + mouse tracking.
-    // ERASE_SCROLLBACK limpa o histórico do terminal → scrollbar nativa desaparece.
-    // ERASE_SCREEN + cursorTo(1,1) posiciona o cursor em (1,1) known-good para o primeiro frame
-    // (substitui o space reservation '\n'×rows que empurrava conteúdo para o scrollback).
+    // Alternate screen buffer: cria buffer limpo separado do histórico.
+    // Funciona em todos os terminais (VS Code, PowerShell, xterm, Windows Terminal).
+    // ERASE_SCREEN + cursorTo(1,1) garante estado known-good para o primeiro frame.
     this.terminal.write(
-      CURSOR_HIDE + ENABLE_MOUSE_TRACKING +
-      ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1, 1)
+      ENTER_ALT_SCREEN + CURSOR_HIDE + ENABLE_MOUSE_TRACKING +
+      ERASE_SCREEN + cursorTo(1, 1)
     );
 
     this.resizeListener = () => {
@@ -57,9 +57,9 @@ export class TUI {
     this.scheduler.dispose();
     this.layout.statusBar.dispose();
 
-    // Limpar tela e scrollback antes de restaurar terminal.
-    // ERASE_SCROLLBACK garante que frames da TUI não ficam no scrollback.
-    this.terminal.write(ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1, 1) + DISABLE_MOUSE_TRACKING + CURSOR_SHOW);
+    // Restaurar terminal: desliga mouse, mostra cursor, sai do alternate screen.
+    // EXIT_ALT_SCREEN restaura o buffer original com histórico intacto.
+    this.terminal.write(DISABLE_MOUSE_TRACKING + CURSOR_SHOW + EXIT_ALT_SCREEN);
 
     if (this.resizeListener) {
       process.stdout.removeListener('resize', this.resizeListener);

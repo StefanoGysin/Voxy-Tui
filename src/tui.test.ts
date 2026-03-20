@@ -40,21 +40,21 @@ describe('TUI', () => {
     expect(() => tui.scheduleRender()).not.toThrow();
   });
 
-  it('start() NÃO usa alt-screen buffer', () => {
+  it('start() usa alternate screen buffer', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });
     tui.start();
-    expect(term.getOutput()).not.toContain('\x1b[?1049h');
+    expect(term.getOutput()).toContain('\x1b[?1049h');
     expect(term.getOutput()).toContain('\x1b[?1002h');
   });
 
-  it('stop() NÃO usa EXIT_ALT_SCREEN, restaura cursor', () => {
+  it('stop() usa EXIT_ALT_SCREEN e restaura cursor', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });
     tui.start();
     term.reset();
     tui.stop();
-    expect(term.getOutput()).not.toContain('\x1b[?1049l');
+    expect(term.getOutput()).toContain('\x1b[?1049l');
     expect(term.getOutput()).toContain('\x1b[?25h');
   });
 
@@ -74,28 +74,31 @@ describe('TUI', () => {
     expect(term.getOutput()).toContain('\x1b[?1002l');
   });
 
-  it('start() emite ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1,1)', () => {
+  it('start() emite ENTER_ALT_SCREEN + ERASE_SCREEN + cursorTo(1,1)', () => {
     const term = new MockTerminal(80, 24);
     tui = new TUI({ terminal: term });
     tui.start();
     const output = term.getOutput();
-    // ERASE_SCROLLBACK (\x1b[3J) limpa scrollback → sem scrollbar nativa
-    expect(output).toContain('\x1b[3J');
+    // ENTER_ALT_SCREEN
+    expect(output).toContain('\x1b[?1049h');
     // ERASE_SCREEN (\x1b[2J) limpa tela visível
     expect(output).toContain('\x1b[2J');
     // cursorTo(1,1)
     expect(output).toContain('\x1b[1;1H');
+    // Não usa ERASE_SCROLLBACK — alternate screen tem buffer próprio
+    expect(output).not.toContain('\x1b[3J');
   });
 
-  it('stop() emite ERASE_SCROLLBACK + ERASE_SCREEN + cursorTo(1,1)', () => {
+  it('stop() emite EXIT_ALT_SCREEN sem ERASE_SCROLLBACK', () => {
     const term = new MockTerminal();
     tui = new TUI({ terminal: term });
     tui.start();
     term.reset();
     tui.stop();
-    expect(term.getOutput()).toContain('\x1b[3J');    // ERASE_SCROLLBACK
-    expect(term.getOutput()).toContain('\x1b[2J');    // ERASE_SCREEN
-    expect(term.getOutput()).toContain('\x1b[1;1H'); // cursorTo(1, 1)
+    expect(term.getOutput()).toContain('\x1b[?1049l');  // EXIT_ALT_SCREEN
+    // Não precisa ERASE — EXIT_ALT_SCREEN restaura o buffer original
+    expect(term.getOutput()).not.toContain('\x1b[3J');
+    expect(term.getOutput()).not.toContain('\x1b[2J');
   });
 
   it('adicionar mensagem e re-render produz output diferente', () => {

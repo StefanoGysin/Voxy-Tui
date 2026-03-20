@@ -9,3 +9,5 @@ export { Dialog } from './dialog';
 export type { DialogConfig } from './dialog';
 export { Toast } from './toast';
 export type { ToastOptions, ToastType } from './toast';
+export { Sidebar } from './sidebar';
+export type { SidebarTab, SidebarOptions } from './sidebar';

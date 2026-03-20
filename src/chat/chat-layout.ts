@@ -1,9 +1,11 @@
 import type { Component, KeyEvent, MouseClickEvent, MouseDragEvent } from '../core/component';
+import type { Sidebar } from '../components/sidebar';
 import { MessageList } from './message-list';
 import { InputBar } from './input-bar';
 import { StatusBar } from './status-bar';
 import type { ToolActivityLog } from './tool-activity-log';
 import type { Toast } from '../components/toast';
+import { fitWidth } from '../utils/width';
 
 const SCROLL_LINES = 3;   // mouse wheel: linhas por evento
 const PAGE_LINES   = 10;  // pageup/pagedown: linhas por evento
@@ -15,8 +17,12 @@ export class ChatLayout implements Component {
   readonly statusBar: StatusBar;
   private activityLog: ToolActivityLog | null = null;
   private toastComponent: Toast | null = null;
+  private sidebarComponent: Sidebar | null = null;
+  private sidebarFocused = false;
   private lastScrollAt = 0;
   private lastMessagesHeight = 0;
+  private lastChatWidth = 0;
+  private lastSidebarWidth = 0;
 
   constructor() {
     this.messageList = new MessageList();
@@ -40,7 +46,48 @@ export class ChatLayout implements Component {
     this.toastComponent = toast;
   }
 
+  /**
+   * Define o Sidebar a ser renderizado à direita do chat.
+   * Passe null para remover.
+   */
+  setSidebar(sidebar: Sidebar | null): void {
+    this.sidebarComponent = sidebar;
+  }
+
+  /**
+   * Retorna se o sidebar tem foco (para routing de input).
+   */
+  isSidebarFocused(): boolean {
+    return this.sidebarFocused && this.sidebarComponent?.isVisible() === true;
+  }
+
+  /**
+   * Alterna foco entre chat e sidebar.
+   */
+  toggleSidebarFocus(): void {
+    if (!this.sidebarComponent?.isVisible()) return;
+    this.sidebarFocused = !this.sidebarFocused;
+  }
+
   render(width: number, height: number): string[] {
+    // Calcular largura do sidebar
+    const sidebarVisible = this.sidebarComponent?.isVisible() === true;
+    const MIN_SIDEBAR_WIDTH = 28;
+    const MIN_CHAT_WIDTH = 40;
+
+    let chatWidth = width;
+    let sidebarWidth = 0;
+
+    if (sidebarVisible && width >= MIN_CHAT_WIDTH + MIN_SIDEBAR_WIDTH) {
+      // ~30% para sidebar, mínimo MIN_SIDEBAR_WIDTH, máximo 40
+      sidebarWidth = Math.min(40, Math.max(MIN_SIDEBAR_WIDTH, Math.floor(width * 0.3)));
+      chatWidth = width - sidebarWidth;
+    }
+
+    this.lastChatWidth = chatWidth;
+    this.lastSidebarWidth = sidebarWidth;
+
+    // Renderizar chat com chatWidth
     const statusHeight = 1;
     const inputHeight = Math.max(this.inputBar.minHeight(), 2);
     const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
@@ -48,17 +95,35 @@ export class ChatLayout implements Component {
     const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight - toastHeight);
     this.lastMessagesHeight = messagesHeight;
 
-    const messageLines = this.messageList.render(width, messagesHeight);
+    const messageLines = this.messageList.render(chatWidth, messagesHeight);
     const activityLines = activityHeight > 0
-      ? this.activityLog!.render(width, activityHeight)
+      ? this.activityLog!.render(chatWidth, activityHeight)
       : [];
     const toastLines = toastHeight > 0
-      ? this.toastComponent!.render(width, toastHeight)
+      ? this.toastComponent!.render(chatWidth, toastHeight)
       : [];
-    const inputLines = this.inputBar.render(width, inputHeight);
-    const statusLines = this.statusBar.render(width, statusHeight);
+    const inputLines = this.inputBar.render(chatWidth, inputHeight);
+    const statusLines = this.statusBar.render(chatWidth, statusHeight);
 
-    return [...messageLines, ...activityLines, ...toastLines, ...inputLines, ...statusLines];
+    const chatLines = [...messageLines, ...activityLines, ...toastLines, ...inputLines, ...statusLines];
+
+    // Se sem sidebar, retornar chat direto
+    if (sidebarWidth === 0 || !this.sidebarComponent) {
+      return chatLines;
+    }
+
+    // Renderizar sidebar
+    const sidebarLines = this.sidebarComponent.render(sidebarWidth, height);
+
+    // Juntar horizontalmente: chatLine + sidebarLine
+    const result: string[] = [];
+    for (let i = 0; i < height; i++) {
+      const chatLine = fitWidth(chatLines[i] ?? '', chatWidth);
+      const sidebarLine = fitWidth(sidebarLines[i] ?? '', sidebarWidth);
+      result.push(chatLine + sidebarLine);
+    }
+
+    return result;
   }
 
   /**
@@ -66,6 +131,24 @@ export class ChatLayout implements Component {
    * MessageList ocupa as linhas 1..lastMessagesHeight do layout.
    */
   handleMouse(event: MouseClickEvent): boolean {
+    const sidebarVisible = this.sidebarComponent?.isVisible() === true;
+
+    // Se sidebar visível e click no lado direito → rotear ao sidebar
+    if (sidebarVisible && this.lastSidebarWidth > 0 && event.x > this.lastChatWidth) {
+      this.sidebarFocused = true;
+      const sidebarEvent: MouseClickEvent = {
+        ...event,
+        x: event.x - this.lastChatWidth,
+      };
+      return this.sidebarComponent!.handleMouse(sidebarEvent);
+    }
+
+    // Click no chat → tirar foco do sidebar
+    if (sidebarVisible) {
+      this.sidebarFocused = false;
+    }
+
+    // Routing normal do chat
     if (event.y >= 1 && event.y <= this.lastMessagesHeight) {
       return this.messageList.handleMouse?.(event) ?? false;
     }
@@ -77,6 +160,12 @@ export class ChatLayout implements Component {
    * Drag na área de mensagens → MessageList.
    */
   handleMouseDrag(event: MouseDragEvent): boolean {
+    // Se sidebar visível e drag no lado direito → consumir sem ação
+    if (this.sidebarComponent?.isVisible() && this.lastSidebarWidth > 0 && event.x > this.lastChatWidth) {
+      return true;
+    }
+
+    // Routing normal
     if (event.y >= 1 && event.y <= this.lastMessagesHeight) {
       return this.messageList.handleMouseDrag?.(event) ?? false;
     }
@@ -85,6 +174,19 @@ export class ChatLayout implements Component {
 
   handleKey(event: KeyEvent): boolean {
     const { key } = event;
+
+    // Tab alterna foco entre chat e sidebar
+    if (key === 'tab' && !event.shift && !event.ctrl && !event.meta) {
+      if (this.sidebarComponent?.isVisible()) {
+        this.toggleSidebarFocus();
+        return true;
+      }
+    }
+
+    // Se sidebar tem foco → delegar ao sidebar
+    if (this.isSidebarFocused()) {
+      return this.sidebarComponent!.handleKey(event);
+    }
 
     // === Bloquear Enter enquanto seleção de texto ativa (evitar envio acidental) ===
     if (key === 'return' && this.messageList.isSelectionActive()) {

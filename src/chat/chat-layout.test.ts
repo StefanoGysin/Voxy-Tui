@@ -2,8 +2,12 @@ import { describe, test, expect, afterEach, beforeEach, jest } from 'bun:test';
 import { ChatLayout } from './chat-layout';
 import { ToolActivityLog } from './tool-activity-log';
 import { Toast } from '../components/toast';
+import { Sidebar } from '../components/sidebar';
+import type { SidebarTab } from '../components/sidebar';
 import { stripAnsi } from '../utils/strip-ansi';
+import { measureWidth } from '../utils/width';
 import type { ChatMessage } from './types';
+import type { KeyEvent } from '../core/component';
 
 describe('ChatLayout', () => {
   let layout: ChatLayout;
@@ -311,5 +315,215 @@ describe('ChatLayout — toast', () => {
     expect(stripped.some(l => l.includes('Mode'))).toBe(true);
 
     toolLog.dispose();
+  });
+});
+
+// --- Helper: cria um SidebarTab fake ---
+function createFakeTab(id: string, label: string): SidebarTab {
+  return {
+    id,
+    label,
+    render(contentWidth: number): string[] {
+      return [`${label} content`];
+    },
+    handleKey(_event: KeyEvent): boolean {
+      return false;
+    },
+    getHints(): string {
+      return `${label} hints`;
+    },
+  };
+}
+
+function mkKey(key: string, opts?: Partial<KeyEvent>): KeyEvent {
+  return { key, ctrl: false, meta: false, shift: false, raw: key, ...opts };
+}
+
+describe('ChatLayout — sidebar render', () => {
+  let layout: ChatLayout;
+  let sidebar: Sidebar;
+
+  beforeEach(() => {
+    layout = new ChatLayout();
+    sidebar = new Sidebar();
+    sidebar.addTab(createFakeTab('tab1', 'Settings'));
+  });
+
+  afterEach(() => {
+    layout.statusBar.dispose();
+  });
+
+  test('sem sidebar: render usa largura total', () => {
+    const lines = layout.render(100, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('sidebar escondido: render usa largura total', () => {
+    layout.setSidebar(sidebar);
+    // sidebar começa não-visível
+    const lines = layout.render(100, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('sidebar visível: render retorna height linhas', () => {
+    layout.setSidebar(sidebar);
+    sidebar.setVisible(true);
+    const lines = layout.render(100, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('sidebar visível: linhas contêm conteúdo do sidebar', () => {
+    layout.setSidebar(sidebar);
+    sidebar.setVisible(true);
+    const lines = layout.render(100, 20);
+    // Sidebar renderiza com borda │ — verificar que alguma linha contém │
+    const stripped = lines.map(l => stripAnsi(l));
+    const hasBorder = stripped.some(l => l.includes('│'));
+    expect(hasBorder).toBe(true);
+  });
+
+  test('sidebar visível em terminal estreito (< 68): sidebar auto-esconde', () => {
+    layout.setSidebar(sidebar);
+    sidebar.setVisible(true);
+    // 50 cols < 40 (min chat) + 28 (min sidebar) = 68
+    const lines = layout.render(50, 20);
+    expect(lines).toHaveLength(20);
+    // Não deve ter conteúdo de sidebar (sem borda │)
+    const stripped = lines.map(l => stripAnsi(l));
+    const hasBorder = stripped.some(l => l.includes('│'));
+    expect(hasBorder).toBe(false);
+  });
+
+  test('sidebar visível em terminal largo: sidebar ocupa ~30%', () => {
+    layout.setSidebar(sidebar);
+    sidebar.setVisible(true);
+    const width = 120;
+    const lines = layout.render(width, 20);
+    expect(lines).toHaveLength(20);
+    // Cada linha deve ter exatamente width colunas visuais
+    for (const line of lines) {
+      const visual = measureWidth(stripAnsi(line));
+      expect(visual).toBe(width);
+    }
+  });
+
+  test('setSidebar(null) remove o sidebar', () => {
+    layout.setSidebar(sidebar);
+    sidebar.setVisible(true);
+    layout.setSidebar(null);
+    const lines = layout.render(100, 20);
+    expect(lines).toHaveLength(20);
+    const stripped = lines.map(l => stripAnsi(l));
+    const hasBorder = stripped.some(l => l.includes('│'));
+    expect(hasBorder).toBe(false);
+  });
+});
+
+describe('ChatLayout — sidebar foco', () => {
+  let layout: ChatLayout;
+  let sidebar: Sidebar;
+
+  beforeEach(() => {
+    layout = new ChatLayout();
+    sidebar = new Sidebar();
+    sidebar.addTab(createFakeTab('tab1', 'Settings'));
+    layout.setSidebar(sidebar);
+  });
+
+  afterEach(() => {
+    layout.statusBar.dispose();
+  });
+
+  test('isSidebarFocused é false inicialmente', () => {
+    sidebar.setVisible(true);
+    expect(layout.isSidebarFocused()).toBe(false);
+  });
+
+  test('Tab alterna foco para sidebar', () => {
+    sidebar.setVisible(true);
+    layout.handleKey(mkKey('tab'));
+    expect(layout.isSidebarFocused()).toBe(true);
+  });
+
+  test('Tab duplo volta foco para chat', () => {
+    sidebar.setVisible(true);
+    layout.handleKey(mkKey('tab'));
+    layout.handleKey(mkKey('tab'));
+    expect(layout.isSidebarFocused()).toBe(false);
+  });
+
+  test('Tab sem sidebar visível não alterna foco', () => {
+    // sidebar não visível
+    layout.handleKey(mkKey('tab'));
+    expect(layout.isSidebarFocused()).toBe(false);
+  });
+
+  test('quando sidebar tem foco, teclas são delegadas ao sidebar', () => {
+    sidebar.setVisible(true);
+    layout.handleKey(mkKey('tab')); // foco no sidebar
+    // inputBar não deve receber a tecla
+    layout.inputBar.onFocus();
+    layout.handleKey(mkKey('z'));
+    // 'z' foi delegado ao sidebar (que não faz nada com 'z' → delegado à tab → retorna false)
+    // inputBar NÃO deve ter recebido a tecla
+    expect(layout.inputBar.getValue()).toBe('');
+  });
+
+  test('quando chat tem foco, teclas vão para inputBar', () => {
+    sidebar.setVisible(true);
+    layout.render(100, 20);
+    layout.inputBar.onFocus();
+    layout.handleKey(mkKey('z'));
+    expect(layout.inputBar.getValue()).toBe('z');
+  });
+});
+
+describe('ChatLayout — sidebar mouse routing', () => {
+  let layout: ChatLayout;
+  let sidebar: Sidebar;
+
+  beforeEach(() => {
+    layout = new ChatLayout();
+    sidebar = new Sidebar();
+    sidebar.addTab(createFakeTab('tab1', 'Settings'));
+    layout.setSidebar(sidebar);
+    sidebar.setVisible(true);
+    // Render para calcular lastChatWidth e lastSidebarWidth
+    layout.render(100, 20);
+  });
+
+  afterEach(() => {
+    layout.statusBar.dispose();
+  });
+
+  test('click no lado direito roteia ao sidebar', () => {
+    // width=100, sidebar ~30 cols → chatWidth ~70
+    const result = layout.handleMouse({ x: 75, y: 1, button: 0, isRelease: false });
+    expect(result).toBe(true); // sidebar consome
+    expect(layout.isSidebarFocused()).toBe(true);
+  });
+
+  test('click no lado esquerdo roteia ao chat', () => {
+    // Primeiro dar foco ao sidebar
+    layout.handleKey(mkKey('tab'));
+    expect(layout.isSidebarFocused()).toBe(true);
+
+    // Click no chat deve tirar foco do sidebar
+    layout.handleMouse({ x: 10, y: 1, button: 0, isRelease: false });
+    expect(layout.isSidebarFocused()).toBe(false);
+  });
+
+  test('drag no lado do sidebar é consumido sem ação', () => {
+    const result = layout.handleMouseDrag({ x: 75, y: 5, button: 0 });
+    expect(result).toBe(true);
+  });
+
+  test('drag no lado do chat roteia normalmente', () => {
+    layout.messageList.addMessage({ id: '1', role: 'user', content: 'hello', timestamp: new Date() });
+    layout.render(100, 20);
+    // Setar anchor primeiro (simular press)
+    layout.handleMouse({ x: 5, y: 1, button: 0, isRelease: false });
+    const result = layout.handleMouseDrag({ x: 10, y: 1, button: 0 });
+    expect(result).toBe(true);
   });
 });
