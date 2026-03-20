@@ -29,14 +29,14 @@ describe('Renderer', () => {
     expect(term.getOutput()).toBe('');
   });
 
-  test('render com mudança parcial re-renderiza da primeira linha diferente', () => {
+  test('render com mudança parcial faz full redraw (todas as linhas)', () => {
     const term = new MockTerminal();
     const renderer = new Renderer(term);
     renderer.render([makeComponent(['linha A', 'linha B', 'linha C'])]);
     term.reset();
     renderer.render([makeComponent(['linha A', 'linha B MUDOU', 'linha C'])]);
     const output = term.getOutput();
-    expect(output).not.toContain('linha A'); // linha 0 não mudou, não deve ser reescrita
+    expect(output).toContain('linha A'); // full redraw inclui todas as linhas
     expect(output).toContain('linha B MUDOU');
     expect(output).toContain('linha C');
   });
@@ -87,12 +87,11 @@ describe('Renderer', () => {
     expect(term.getOutput()).toContain('\x1b[5;1H'); // cursorTo(5, 1) — última linha do conteúdo
   });
 
-  test('diff render ancora cursor na última linha do conteúdo (sem drift)', () => {
+  test('re-render ancora cursor na última linha do conteúdo (sem drift)', () => {
     const term = new MockTerminal(80, 5);
     const renderer = new Renderer(term);
     renderer.render([makeComponent(['a', 'b', 'c', 'd', 'e'])]);
     term.reset();
-    // Diff: apenas última linha muda
     renderer.render([makeComponent(['a', 'b', 'c', 'd', 'X'])]);
     expect(term.getOutput()).toContain('\x1b[5;1H'); // cursorTo(5, 1) — última linha do conteúdo
   });
