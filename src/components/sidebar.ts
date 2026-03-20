@@ -267,7 +267,7 @@ export class Sidebar implements Component {
     const gap = Math.max(1, innerWidth - leftVisual - rightVisual);
     const bgLeft = left.replaceAll(RESET, RESET + this.headerBg);
     const bgRight = right.replaceAll(RESET, RESET + this.headerBg);
-    const line = `${this.headerBg}${bgLeft}${' '.repeat(gap)}${bgRight}${RESET}`;
+    const line = `${this.headerBg}${bgLeft}${' '.repeat(gap)}${bgRight}${RESET}${this.headerBg}`;
     return padEndAnsi(line, innerWidth);
   }
 
@@ -358,11 +358,28 @@ export class Sidebar implements Component {
   private renderFooter(innerWidth: number): string {
     const activeTab = this.tabs[this.activeTabIndex];
     const hints = activeTab?.getHints() ?? '';
-    const truncatedHints = truncate(hints, Math.max(0, innerWidth - 4));
+
+    // Adaptar hints à largura disponível
+    const availableWidth = Math.max(0, innerWidth - 2); // 2 para padding
+    let displayHints = hints;
+
+    // Se hints não cabem, usar versão compacta
+    if (measureWidth(stripAnsi(hints)) > availableWidth) {
+      displayHints = hints
+        .replace('navegar', 'nav')
+        .replace('selecionar', 'sel')
+        .replace('voltar', 'back');
+    }
+
+    // Se AINDA não cabe, truncar
+    if (measureWidth(stripAnsi(displayHints)) > availableWidth) {
+      displayHints = truncate(displayHints, availableWidth);
+    }
+
     // Re-apply bgColor after every RESET in hints
-    const bgHints = truncatedHints.replaceAll(RESET, RESET + this.bgColor);
+    const bgHints = displayHints.replaceAll(RESET, RESET + this.bgColor);
     return padEndAnsi(
-      `${this.bgColor} ${this.hintsFg}${bgHints}${RESET}`,
+      `${this.bgColor} ${this.hintsFg}${bgHints}${RESET}${this.bgColor}`,
       innerWidth,
     );
   }

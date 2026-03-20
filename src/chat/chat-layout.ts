@@ -5,7 +5,7 @@ import { InputBar } from './input-bar';
 import { StatusBar } from './status-bar';
 import type { ToolActivityLog } from './tool-activity-log';
 import type { Toast } from '../components/toast';
-import { padEndAnsi } from '../utils/width';
+import { fitWidth } from '../utils/width';
 
 const SCROLL_LINES = 3;   // mouse wheel: linhas por evento
 const PAGE_LINES   = 10;  // pageup/pagedown: linhas por evento
@@ -118,8 +118,8 @@ export class ChatLayout implements Component {
     // Juntar horizontalmente: chatLine + sidebarLine
     const result: string[] = [];
     for (let i = 0; i < height; i++) {
-      const chatLine = padEndAnsi(chatLines[i] ?? '', chatWidth);
-      const sidebarLine = sidebarLines[i] ?? '';
+      const chatLine = fitWidth(chatLines[i] ?? '', chatWidth);
+      const sidebarLine = fitWidth(sidebarLines[i] ?? '', sidebarWidth);
       result.push(chatLine + sidebarLine);
     }
 
