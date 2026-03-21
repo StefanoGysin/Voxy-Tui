@@ -29,14 +29,14 @@ describe('Renderer', () => {
     expect(term.getOutput()).toBe('');
   });
 
-  test('render com mudança parcial faz full redraw (todas as linhas)', () => {
+  test('render com mudança parcial faz diff (só a partir da primeira diferença)', () => {
     const term = new MockTerminal();
     const renderer = new Renderer(term);
     renderer.render([makeComponent(['linha A', 'linha B', 'linha C'])]);
     term.reset();
     renderer.render([makeComponent(['linha A', 'linha B MUDOU', 'linha C'])]);
     const output = term.getOutput();
-    expect(output).toContain('linha A'); // full redraw inclui todas as linhas
+    expect(output).not.toContain('linha A'); // diff pula linhas inalteradas
     expect(output).toContain('linha B MUDOU');
     expect(output).toContain('linha C');
   });
