@@ -43,12 +43,16 @@ describe('ChatLayout', () => {
     expect(layout.inputBar.getValue()).toBe('z');
   });
 
-  test('statusBar ocupa exatamente 1 linha na parte inferior', () => {
+  test('statusBar fica acima do inputBar', () => {
     layout = new ChatLayout();
     layout.statusBar.setModel('test-model');
-    const lines = layout.render(80, 10);
-    const lastLine = stripAnsi(lines[lines.length - 1]);
-    expect(lastLine).toContain('test-model');
+    const lines = layout.render(80, 10).map((l: string) => stripAnsi(l));
+    // inputBar é a última linha (placeholder), statusBar fica logo acima do separador
+    const lastLine = lines[lines.length - 1];
+    expect(lastLine).toContain('Type a message');
+    const statusIdx = lines.findIndex(l => l.includes('test-model'));
+    expect(statusIdx).toBeGreaterThan(-1);
+    expect(statusIdx).toBeLessThan(lines.length - 1);
   });
 
   test('minHeight é razoável (> 4)', () => {
@@ -91,7 +95,6 @@ describe('ChatLayout — activityLog', () => {
   test('linhas do activityLog aparecem entre messageList e inputBar', () => {
     layout.setActivityLog(toolLog);
     toolLog.addTool('1', 'bash', 'bun test');
-    toolLog.updateTool('1', 'done');
     const lines = layout.render(80, 20).map((l: string) => stripAnsi(l));
     // inputBar tem separador '─' — find last index manually
     let separatorIdx = -1;
@@ -265,7 +268,6 @@ describe('ChatLayout — toast', () => {
     layout.setActivityLog(toolLog);
     layout.setToast(toast);
     toolLog.addTool('1', 'bash', 'bun test');
-    toolLog.updateTool('1', 'done');
     toast.show({ type: 'mode', label: 'Autopilot', duration: 0 });
     const lines = layout.render(80, 20).map((l: string) => stripAnsi(l));
 

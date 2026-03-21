@@ -129,7 +129,7 @@ export class ChatLayout implements Component {
     const inputLines = this.inputBar.render(chatWidth, inputHeight);
     const statusLines = this.statusBar.render(chatWidth, statusHeight);
 
-    const chatLines = [...messageLines, ...activityLines, ...toastLines, ...permLines, ...inputLines, ...statusLines];
+    const chatLines = [...messageLines, ...activityLines, ...toastLines, ...permLines, ...statusLines, ...inputLines];
 
     // Se sem sidebar, retornar chat direto
     if (sidebarWidth === 0 || !this.sidebarComponent) {
