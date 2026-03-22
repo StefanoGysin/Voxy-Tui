@@ -32,13 +32,16 @@ describe('Renderer', () => {
   test('render com mudança parcial faz diff (só a partir da primeira diferença)', () => {
     const term = new MockTerminal();
     const renderer = new Renderer(term);
-    renderer.render([makeComponent(['linha A', 'linha B', 'linha C'])]);
+    // Usar 10 linhas para que 1 mudança (10%) fique abaixo do threshold de 15%
+    const lines = Array.from({ length: 10 }, (_, i) => `linha ${i}`);
+    renderer.render([makeComponent(lines)]);
     term.reset();
-    renderer.render([makeComponent(['linha A', 'linha B MUDOU', 'linha C'])]);
+    const changed = [...lines];
+    changed[5] = 'linha 5 MUDOU';
+    renderer.render([makeComponent(changed)]);
     const output = term.getOutput();
-    expect(output).not.toContain('linha A'); // diff pula linhas inalteradas
-    expect(output).toContain('linha B MUDOU');
-    expect(output).toContain('linha C');
+    expect(output).not.toContain('linha 0'); // diff pula linhas inalteradas
+    expect(output).toContain('linha 5 MUDOU');
   });
 
   test('invalidate força full redraw no próximo render', () => {
