@@ -18,6 +18,8 @@ export interface PermissionDialogSlot {
   handleKey(event: KeyEvent): boolean;
   /** Número de linhas que o dialog ocupa agora (0 = inativo). */
   lineCount(): number;
+  /** Opcional: processa click de mouse. Retorna true se consumiu o evento. */
+  handleMouse?(event: MouseClickEvent): boolean;
 }
 
 const SCROLL_LINES = 3;   // mouse wheel: linhas por evento
@@ -37,6 +39,8 @@ export class ChatLayout implements Component {
   private lastMessagesHeight = 0;
   private lastChatWidth = 0;
   private lastSidebarWidth = 0;
+  private lastPermStartY = 0;
+  private lastPermHeight = 0;
 
   constructor() {
     this.messageList = new MessageList();
@@ -66,6 +70,11 @@ export class ChatLayout implements Component {
    */
   setPermissionDialog(slot: PermissionDialogSlot | null): void {
     this.permissionSlot = slot;
+  }
+
+  /** Retorna true se o permission dialog está ativo (tem linhas renderizadas). */
+  hasActivePermissionDialog(): boolean {
+    return this.permissionSlot !== null && this.permissionSlot.lineCount() > 0;
   }
 
   /**
@@ -118,6 +127,8 @@ export class ChatLayout implements Component {
     const permHeight = permLines.length;
     const messagesHeight = Math.max(0, height - statusHeight - inputHeight - activityHeight - toastHeight - permHeight);
     this.lastMessagesHeight = messagesHeight;
+    this.lastPermStartY = messagesHeight + activityHeight + toastHeight + 1;
+    this.lastPermHeight = permHeight;
 
     const messageLines = this.messageList.render(chatWidth, messagesHeight);
     const activityLines = activityHeight > 0
@@ -176,6 +187,18 @@ export class ChatLayout implements Component {
     if (event.y >= 1 && event.y <= this.lastMessagesHeight) {
       return this.messageList.handleMouse?.(event) ?? false;
     }
+
+    // Click na área do permission dialog → rotear para ele
+    if (this.lastPermHeight > 0 && this.permissionSlot?.handleMouse) {
+      if (event.y >= this.lastPermStartY && event.y < this.lastPermStartY + this.lastPermHeight) {
+        const localEvent: MouseClickEvent = {
+          ...event,
+          y: event.y - this.lastPermStartY,
+        };
+        return this.permissionSlot.handleMouse(localEvent);
+      }
+    }
+
     return false;
   }
 
