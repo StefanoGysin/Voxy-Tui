@@ -109,9 +109,18 @@ input.onChange?: (text: string) => void
 // — padding de linhas vazias no topo se conteúdo < height
 // — slice se conteúdo > height (com scrollOffset)
 // — textWidth = width - MARGIN_LEFT (sem scrollbar — buffer primário)
-// ChatLayout distribui: messagesHeight + activityHeight + toastHeight + inputHeight + statusHeight = height
+// ChatLayout distribui: messagesHeight + activityHeight + toastHeight + permHeight + statusHeight + inputHeight = height
+// Ordem de render: messages → activity → toast → permission dialog → status → input
 // setActivityLog(log: ToolActivityLog | null): void — slot entre messages e toast
-// setToast(toast: Toast | null): void — slot entre activity e input (0-3 linhas)
+// setToast(toast: Toast | null): void — slot entre activity e permission (0-3 linhas)
+// setPermissionDialog(slot: PermissionDialogSlot | null): void — slot entre toast e status
+// PermissionDialogSlot: { render(width): string[], handleKey(event): boolean, lineCount(): number }
+// Quando ativo (lineCount > 0), handleKey delega ao slot com prioridade sobre scroll e inputBar
+// setSidebar(sidebar: Sidebar | null): void — sidebar à direita do chat (~30% width, min 28, max 40)
+// toggleSidebarFocus(): void — alterna foco entre chat e sidebar
+// isSidebarFocused(): boolean — retorna se sidebar tem foco
+// handleClick(event: MouseClickEvent): boolean — delega click para sidebar ou messageList
+// handleDrag(event: MouseDragEvent): boolean — delega drag para sidebar
 ```
 
 ### StreamingThinkingIndicator
@@ -164,6 +173,15 @@ tui.layout: ChatLayout  // acesso direto ao layout
 // em ambos os paths (primeiro render e diff) — elimina cursor drift cumulativo.
 ```
 
+### Renderer
+```typescript
+// Full redraw threshold: 15% das linhas mudaram → full redraw em vez de diff
+// Este valor foi ajustado de 50% para 15% para garantir que mudanças de layout
+// médias (ex: permission dialog aparecendo/desaparecendo ~27% das linhas)
+// sejam renderizadas via full redraw com synchronized output (sem ghost text).
+// NÃO aumentar este valor sem testar com permission dialog em terminal de 30 linhas.
+```
+
 ### Scrollable
 ```typescript
 new Scrollable(child: Component)
@@ -201,6 +219,22 @@ toast.onUpdate?: () => void
 // render() retorna [] quando vazio, 1 linha por toast quando ativo (máx 3)
 ```
 
+### Theme (`src/core/theme.ts`)
+```typescript
+import { theme } from 'voxy-tui';
+// Objeto readonly com cores ANSI pré-computadas:
+// theme.panelBg       — bg(12, 16, 26)  — fundo de painéis (sidebar, permission dialog)
+// theme.panelHeaderBg — bg(15, 20, 30)  — fundo de headers de painéis
+// theme.borderFg      — fg(40, 55, 70)  — cor de bordas e separadores ─
+// theme.selectedBg    — bg(20, 32, 45)  — fundo de item selecionado
+// theme.selectedFg    — fg(34, 211, 238) — texto de item selecionado (cyan)
+// theme.titleFg       — fg(147, 161, 182) — títulos
+// theme.textDim       — fg(72, 85, 106) — texto secundário
+// theme.hintsFg       — fg(58, 71, 89)  — hints e atalhos
+// theme.dangerFg, theme.dangerSelectedBg, theme.dangerSelectedFg — modo danger
+// Anti-bleed pattern: padded.replaceAll(RESET, RESET + bg) — previne bleed de background quando ANSI RESET aparece mid-line
+```
+
 ### `padEndAnsi` (novo utilitário)
 ```typescript
 import { padEndAnsi } from 'voxy-tui';
@@ -217,8 +251,6 @@ padEndAnsi(line: string, targetWidth: number): string
 | `Border.render` | `padEnd()` sem ANSI awareness — padding errado com texto colorido | ✅ Resolvido (Session 10) |
 | `Stack` (horizontal) | `padEnd()` sem ANSI awareness em colunas | ✅ Resolvido (Session 10) |
 | `TextInput` | `cursorCol` em code-unit index (não visual) — cursor pode deslocar com emoji wide | Aceitável |
-| `Scrollable` | Ainda placeholder | ✅ Implementado (Session 10) |
-
 **Resolvidos**: `Text.alignLine` — usava `line.length`, agora usa `measureWidth(stripAnsi(line))` ✓
 
 ---
@@ -243,20 +275,8 @@ padEndAnsi(line: string, targetWidth: number): string
 | **33 — Ghost Text Fix** | `feat/session-33-ghost-text-fix` | ✅ merged | 323 |
 | **34 — Ghost Text Fix II** | `fix/session-34-ghost-text-scroll` | ✅ merged | 321 |
 | **35B — ThinkingBlock Fixes** | `feat/session-35b-thinking-block-fixes` | ✅ merged | 356 |
-| **36 — Toast Notification** | `feat/session-36-toast` | 🔄 em progresso | 32 |
-| 11 — TBD | — | ⏳ | — |
-
-### Sessão 7 — escopo planejado
-Transformar os placeholders restantes em `src/chat/`:
-- `markdown.ts` — render Markdown com `marked` lexer
-- `code-block.ts` — syntax highlight com `cli-highlight`
-- `thinking-block.ts` — bloco colapsável para chain-of-thought
-- `tool-call.ts` — display de tool use (nome, input, output, status)
-
-### Sessão 8 — escopo planejado
-- `TUI` class — compositor top-level (wraps Renderer + Scheduler + ChatLayout)
-- Testes de integração end-to-end
-- Demo funcional com mensagens reais
+| **36 — Toast Notification** | `feat/session-36-toast` | ✅ merged | 32 |
+| **37 — PermissionDialogSlot** | `feat/permission-dialog-slot` | ✅ merged | — |
 
 ---
 
@@ -265,19 +285,23 @@ Transformar os placeholders restantes em `src/chat/`:
 ```
 src/
 ├── core/
-│   ├── component.ts     — KeyEvent, Component interfaces
+│   ├── component.ts     — KeyEvent, Component, MouseClickEvent, MouseDragEvent interfaces
 │   ├── ansi.ts          — constantes e funções ANSI completas
 │   ├── terminal.ts      — Terminal interface + ProcessTerminal
-│   ├── renderer.ts      — diff line-level + synchronized output
+│   ├── renderer.ts      — diff line-level + synchronized output (threshold 15%)
 │   ├── scheduler.ts     — RenderScheduler 30fps com dirty flag
+│   ├── theme.ts         — Sistema de cores centralizado (panelBg, borderFg, selectedBg, etc.)
 │   └── index.ts         — barrel público
 ├── components/
 │   ├── text.ts          — Text com wrap/align/color
 │   ├── spinner.ts       — Spinner braille com onUpdate callback
 │   ├── text-input.ts    — MultilineEditor completo (undo, kill ring, Emacs)
 │   ├── border.ts        — Border single/double/rounded
-│   ├── scrollable.ts    — PLACEHOLDER
+│   ├── scrollable.ts    — Scrollable wrapper (scroll vertical com pageup/pagedown)
 │   ├── toast.ts         — Toast notification (tag compacta, auto-dismiss, FIFO)
+│   ├── sidebar.ts       — Sidebar com tabs plugáveis, anti-bleed pattern, collapse/expand
+│   ├── dialog.ts        — Dialog component
+│   ├── dropdown.ts      — Dropdown component
 │   └── index.ts
 ├── layout/
 │   ├── stack.ts         — Stack vertical + horizontal

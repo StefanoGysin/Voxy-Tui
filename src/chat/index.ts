@@ -8,6 +8,7 @@ export type { ToolStatus } from './tool-call';
 export { Markdown, renderMarkdown } from './markdown';
 export { CodeBlock, highlightCode } from './code-block';
 export { ChatLayout } from './chat-layout';
+export type { PermissionDialogSlot } from './chat-layout';
 export { ThinkingBlock } from './thinking-block';
 export { StreamingThinkingIndicator } from './streaming-thinking-indicator';
 export { ToolActivityLog } from './tool-activity-log';

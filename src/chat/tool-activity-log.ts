@@ -4,11 +4,14 @@ import { BRAILLE_FRAMES, FRAME_INTERVAL_MS } from '../components/spinner';
 import { truncate } from '../utils/truncate';
 import type { ToolStatus } from './tool-call';
 
+const MAX_ENTRY_AGE_MS = 30_000;
+
 interface ToolEntry {
   id: string;
   name: string;
   label: string;
   status: ToolStatus;
+  addedAt: number;
 }
 
 export interface ToolActivityLogOptions {
@@ -34,21 +37,46 @@ export class ToolActivityLog implements Component {
    * @param label  Descrição curta (ex: path do arquivo, comando)
    */
   addTool(id: string, name: string, label = ''): void {
-    this.entries.push({ id, name, label, status: 'running' });
+    const existing = this.entries.find(e => e.id === id);
+    if (existing) {
+      existing.name = name;
+      existing.label = label;
+      existing.status = 'running';
+      existing.addedAt = Date.now();
+      this.ensureTimer();
+      return;
+    }
+    this.entries.push({ id, name, label, status: 'running', addedAt: Date.now() });
     this.ensureTimer();
   }
 
   /**
-   * Atualiza o status de uma entry existente.
-   * Se não houver mais nenhuma entry 'running', para o timer.
+   * Remove a entry imediatamente do log.
+   * O activity log só mostra tools em execução — quando termina, some.
    */
-  updateTool(id: string, status: ToolStatus, label?: string): void {
-    const entry = this.entries.find(e => e.id === id);
-    if (!entry) return;
-    entry.status = status;
-    if (label !== undefined) entry.label = label;
+  updateTool(id: string, _status: ToolStatus, _label?: string): void {
+    const idx = this.entries.findIndex(e => e.id === id);
+    if (idx === -1) return;
+    this.entries.splice(idx, 1);
     if (!this.entries.some(e => e.status === 'running')) {
       this.stopTimer();
+    }
+    this.onUpdate?.();
+  }
+
+  /**
+   * Remove uma entry pelo ID, se existir.
+   * Safety net para forçar remoção quando updateTool não encontra
+   * (ex: ID mismatch ou race condition).
+   */
+  removeTool(id: string): void {
+    const idx = this.entries.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      this.entries.splice(idx, 1);
+      if (!this.entries.some(e => e.status === 'running')) {
+        this.stopTimer();
+      }
+      this.onUpdate?.();
     }
   }
 
@@ -70,6 +98,14 @@ export class ToolActivityLog implements Component {
   }
 
   render(width: number, _height: number): string[] {
+    // Safety net: remove entries que ficaram "fantasma" (updateTool nunca chamado)
+    const now = Date.now();
+    const hadEntries = this.entries.length > 0;
+    this.entries = this.entries.filter(e => now - e.addedAt <= MAX_ENTRY_AGE_MS);
+    if (hadEntries && this.entries.length === 0) {
+      this.stopTimer();
+    }
+
     const visible = this.entries.slice(-this.maxVisible);
     return visible.map(entry => this.renderEntry(entry, width));
   }

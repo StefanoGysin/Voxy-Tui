@@ -1,6 +1,6 @@
 import type { Component } from './component';
 import type { Terminal } from './terminal';
-import { SYNC_START, SYNC_END, ERASE_DOWN, ERASE_SCREEN, RESET, cursorUp, cursorTo } from './ansi';
+import { SYNC_START, SYNC_END, ERASE_DOWN, ERASE_SCREEN, RESET, cursorTo } from './ansi';
 
 export class Renderer {
   private previousLines: string[] = [];
@@ -21,58 +21,64 @@ export class Renderer {
     // 2. Primeiro render: escrever tudo diretamente, sem diff
     if (this.isFirstRender) {
       this.isFirstRender = false;
-      // cursorTo ancora cursor na última linha do frame — base consistente para diff renders.
       const output = SYNC_START + currentLines.join('\n') + RESET + cursorTo(currentLines.length, 1) + SYNC_END;
       this.terminal.write(output);
       this.previousLines = currentLines;
       return;
     }
 
-    // 3. Encontrar primeira linha diferente
-    const maxLen = Math.max(currentLines.length, this.previousLines.length);
+    // 3. Detectar se o número total de linhas mudou — se sim, full redraw
+    if (currentLines.length !== this.previousLines.length) {
+      const output = SYNC_START + ERASE_SCREEN + cursorTo(1, 1) +
+        currentLines.join('\n') + RESET + cursorTo(currentLines.length, 1) + SYNC_END;
+      this.terminal.write(output);
+      this.previousLines = currentLines;
+      return;
+    }
+
+    // 4. Encontrar primeira e última linha diferentes
     let firstDiff = -1;
-    for (let i = 0; i < maxLen; i++) {
+    let lastDiff = -1;
+    for (let i = 0; i < currentLines.length; i++) {
       if (currentLines[i] !== this.previousLines[i]) {
-        firstDiff = i;
-        break;
+        if (firstDiff === -1) firstDiff = i;
+        lastDiff = i;
       }
     }
 
-    // 4. Nada mudou — retornar sem escrever nada
+    // 5. Nada mudou — retornar sem escrever nada
     if (firstDiff === -1) return;
 
-    // 5. Calcular quantas linhas subir a partir do fim do render anterior
-    const linesToMoveUp = this.previousLines.length - firstDiff - 1;
-
-    // 6. Construir output em buffer — single write ao final
-    let output = SYNC_START;
-    if (linesToMoveUp > 0) {
-      output += cursorUp(linesToMoveUp);
+    // 6. Se mais de 15% das linhas mudaram, full redraw é mais eficiente
+    const changedCount = lastDiff - firstDiff + 1;
+    if (changedCount > currentLines.length * 0.15) {
+      const output = SYNC_START + ERASE_SCREEN + cursorTo(1, 1) +
+        currentLines.join('\n') + RESET + cursorTo(currentLines.length, 1) + SYNC_END;
+      this.terminal.write(output);
+      this.previousLines = currentLines;
+      return;
     }
+
+    // 7. Diff parcial: ERASE_DOWN do firstDiff e reescrever dali para baixo
+    let output = SYNC_START;
+    output += cursorTo(firstDiff + 1, 1);
     output += ERASE_DOWN;
     for (let i = firstDiff; i < currentLines.length; i++) {
       output += currentLines[i] + RESET;
       if (i < currentLines.length - 1) output += '\n';
     }
-    // cursorTo ancora cursor na última linha do frame — base consistente para o próximo
-    // cursorUp(N). Sem isto, cursor fica em length-1 e o próximo render deriva 1 row acima.
     output += cursorTo(currentLines.length, 1);
     output += SYNC_END;
 
-    // 7. Escrever tudo de uma vez — atomicidade
+    // 8. Escrever tudo de uma vez — atomicidade
     this.terminal.write(output);
     this.previousLines = currentLines;
   }
 
   /**
    * Força full redraw no próximo render (usar após resize).
-   * Emite ERASE_SCREEN + cursorTo(1,1) para limpar a tela visível antes do re-render,
-   * evitando que frames anteriores da TUI sejam empurrados para o scrollback.
    */
   invalidate(): void {
-    // Limpar tela + cursor home antes do re-render.
-    // Sem isso, o first-render path escreveria H linhas da posição atual do cursor
-    // (meio do frame antigo), causando scrolls que levam partes da TUI ao scrollback.
     this.terminal.write(ERASE_SCREEN + cursorTo(1, 1));
     this.previousLines = [];
     this.isFirstRender = true;

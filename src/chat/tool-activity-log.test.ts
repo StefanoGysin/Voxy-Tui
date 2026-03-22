@@ -2,6 +2,8 @@ import { describe, it, expect, afterEach, beforeEach, jest } from 'bun:test';
 import { ToolActivityLog } from './tool-activity-log';
 import { FRAME_INTERVAL_MS } from '../components/spinner';
 
+const MAX_ENTRY_AGE_MS = 30_000;
+
 describe('ToolActivityLog', () => {
   let log: ToolActivityLog;
 
@@ -36,23 +38,25 @@ describe('ToolActivityLog', () => {
     expect(line).toContain('src/index.ts');
   });
 
-  it('updateTool() done mostra ✓', () => {
+  it('updateTool() remove entry imediatamente', () => {
     log.addTool('1', 'read_file');
     log.updateTool('1', 'done');
-    expect(log.render(80, 24)[0]).toContain('✓');
+    expect(log.render(80, 24)).toHaveLength(0);
   });
 
-  it('updateTool() error mostra ✗', () => {
+  it('updateTool() error remove entry imediatamente', () => {
     log.addTool('1', 'bash');
     log.updateTool('1', 'error');
-    expect(log.render(80, 24)[0]).toContain('✗');
+    expect(log.render(80, 24)).toHaveLength(0);
   });
 
-  it('updateTool() para o timer quando todas concluídas', () => {
+  it('updateTool() para o timer quando todas removidas', () => {
     const cb = jest.fn();
     log.onUpdate = cb;
     log.addTool('1', 'read_file');
     log.updateTool('1', 'done');
+    // onUpdate chamado 1x pela remoção, mas timer deve parar
+    cb.mockClear();
     jest.advanceTimersByTime(FRAME_INTERVAL_MS * 5);
     expect(cb).not.toHaveBeenCalled();
   });
@@ -73,7 +77,6 @@ describe('ToolActivityLog', () => {
     log.addTool('2', 'bash');
     log.addTool('3', 'edit');
     expect(log.render(80, 24)).toHaveLength(2);
-    // Mostra as 2 mais recentes
     const lines = log.render(80, 24);
     expect(lines[0]).toContain('bash');
     expect(lines[1]).toContain('edit');
@@ -85,10 +88,94 @@ describe('ToolActivityLog', () => {
     expect(log.render(80, 24)).toEqual([]);
   });
 
-  it('updateTool() atualiza label', () => {
-    log.addTool('1', 'read_file', 'src/old.ts');
-    log.updateTool('1', 'done', 'src/new.ts');
-    expect(log.render(80, 24)[0]).toContain('src/new.ts');
+  it('updateTool() com ID inexistente é no-op', () => {
+    log.addTool('1', 'read_file');
+    log.updateTool('999', 'done');
+    expect(log.render(80, 24)).toHaveLength(1);
+  });
+
+  describe('deduplicação por ID', () => {
+    it('addTool com ID duplicado não cria entry nova', () => {
+      log.addTool('1', 'read_file', 'src/old.ts');
+      log.addTool('1', 'bash', 'bun test');
+      expect(log.render(80, 24)).toHaveLength(1);
+      const line = log.render(80, 24)[0];
+      expect(line).toContain('bash');
+      expect(line).toContain('bun test');
+    });
+
+    it('addTool com ID duplicado reseta status para running', () => {
+      log.addTool('1', 'read_file');
+      // updateTool removes, then addTool re-adds
+      log.updateTool('1', 'done');
+      expect(log.render(80, 24)).toHaveLength(0);
+      log.addTool('1', 'read_file', 'retry');
+      expect(log.render(80, 24)).toHaveLength(1);
+    });
+  });
+
+  describe('remoção imediata após done/error', () => {
+    it('updateTool(done) remove entry imediatamente', () => {
+      log.addTool('1', 'read_file');
+      log.updateTool('1', 'done');
+      expect(log.render(80, 24)).toHaveLength(0);
+    });
+
+    it('updateTool(error) remove entry imediatamente', () => {
+      log.addTool('1', 'bash');
+      log.updateTool('1', 'error');
+      expect(log.render(80, 24)).toHaveLength(0);
+    });
+
+    it('onUpdate é chamado após remoção', () => {
+      const cb = jest.fn();
+      log.onUpdate = cb;
+      log.addTool('1', 'read_file');
+      cb.mockClear();
+      log.updateTool('1', 'done');
+      expect(cb).toHaveBeenCalledTimes(1);
+    });
+
+    it('visibleLineCount() retorna 0 após todas entries removidas', () => {
+      log.addTool('1', 'read_file');
+      log.addTool('2', 'bash');
+      log.updateTool('1', 'done');
+      log.updateTool('2', 'done');
+      expect(log.visibleLineCount()).toBe(0);
+    });
+
+    it('entry running não é removida', () => {
+      log.addTool('1', 'read_file');
+      log.addTool('2', 'bash');
+      log.updateTool('1', 'done');
+      expect(log.render(80, 24)).toHaveLength(1);
+      expect(log.render(80, 24)[0]).toContain('bash');
+    });
+  });
+
+  describe('safety net: MAX_ENTRY_AGE_MS', () => {
+    it('remove entries fantasma após 30s no render()', () => {
+      log.addTool('1', 'read_file');
+      jest.advanceTimersByTime(MAX_ENTRY_AGE_MS + 1);
+      expect(log.render(80, 24)).toHaveLength(0);
+    });
+
+    it('mantém entries recentes', () => {
+      log.addTool('1', 'read_file');
+      jest.advanceTimersByTime(MAX_ENTRY_AGE_MS - 1000);
+      expect(log.render(80, 24)).toHaveLength(1);
+    });
+
+    it('para timer quando todas entries expiram', () => {
+      const cb = jest.fn();
+      log.onUpdate = cb;
+      log.addTool('1', 'bash');
+      jest.advanceTimersByTime(MAX_ENTRY_AGE_MS + 1);
+      cb.mockClear();
+      log.render(80, 24); // triggers cleanup
+      jest.advanceTimersByTime(FRAME_INTERVAL_MS * 5);
+      expect(cb).not.toHaveBeenCalled();
+    });
   });
 
   it('onUpdate() é chamado a cada frame enquanto há running', () => {

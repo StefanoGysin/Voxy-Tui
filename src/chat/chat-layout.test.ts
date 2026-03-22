@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach, beforeEach, jest } from 'bun:test';
 import { ChatLayout } from './chat-layout';
+import type { PermissionDialogSlot } from './chat-layout';
 import { ToolActivityLog } from './tool-activity-log';
 import { Toast } from '../components/toast';
 import { Sidebar } from '../components/sidebar';
@@ -42,12 +43,16 @@ describe('ChatLayout', () => {
     expect(layout.inputBar.getValue()).toBe('z');
   });
 
-  test('statusBar ocupa exatamente 1 linha na parte inferior', () => {
+  test('statusBar fica acima do inputBar', () => {
     layout = new ChatLayout();
     layout.statusBar.setModel('test-model');
-    const lines = layout.render(80, 10);
-    const lastLine = stripAnsi(lines[lines.length - 1]);
-    expect(lastLine).toContain('test-model');
+    const lines = layout.render(80, 10).map((l: string) => stripAnsi(l));
+    // inputBar é a última linha (placeholder), statusBar fica logo acima do separador
+    const lastLine = lines[lines.length - 1];
+    expect(lastLine).toContain('Type a message');
+    const statusIdx = lines.findIndex(l => l.includes('test-model'));
+    expect(statusIdx).toBeGreaterThan(-1);
+    expect(statusIdx).toBeLessThan(lines.length - 1);
   });
 
   test('minHeight é razoável (> 4)', () => {
@@ -90,7 +95,6 @@ describe('ChatLayout — activityLog', () => {
   test('linhas do activityLog aparecem entre messageList e inputBar', () => {
     layout.setActivityLog(toolLog);
     toolLog.addTool('1', 'bash', 'bun test');
-    toolLog.updateTool('1', 'done');
     const lines = layout.render(80, 20).map((l: string) => stripAnsi(l));
     // inputBar tem separador '─' — find last index manually
     let separatorIdx = -1;
@@ -264,7 +268,6 @@ describe('ChatLayout — toast', () => {
     layout.setActivityLog(toolLog);
     layout.setToast(toast);
     toolLog.addTool('1', 'bash', 'bun test');
-    toolLog.updateTool('1', 'done');
     toast.show({ type: 'mode', label: 'Autopilot', duration: 0 });
     const lines = layout.render(80, 20).map((l: string) => stripAnsi(l));
 
@@ -525,5 +528,129 @@ describe('ChatLayout — sidebar mouse routing', () => {
     layout.handleMouse({ x: 5, y: 1, button: 0, isRelease: false });
     const result = layout.handleMouseDrag({ x: 10, y: 1, button: 0 });
     expect(result).toBe(true);
+  });
+});
+
+// --- Helper: cria um PermissionDialogSlot fake ---
+function createFakePermSlot(lines: string[], active: boolean): PermissionDialogSlot {
+  return {
+    render(width: number): string[] {
+      return active ? lines : [];
+    },
+    handleKey(event: KeyEvent): boolean {
+      return active; // consome tudo quando ativo
+    },
+    lineCount(): number {
+      return active ? lines.length : 0;
+    },
+  };
+}
+
+describe('ChatLayout — permissionDialogSlot', () => {
+  let layout: ChatLayout;
+
+  beforeEach(() => {
+    layout = new ChatLayout();
+  });
+
+  afterEach(() => {
+    layout.statusBar.dispose();
+  });
+
+  test('renderiza normalmente sem permissionSlot (null)', () => {
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('permissionSlot com lineCount()=0 não afeta layout', () => {
+    const slot = createFakePermSlot([], false);
+    layout.setPermissionDialog(slot);
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+  });
+
+  test('permissionSlot com lineCount()=3 reduz messagesHeight em 3', () => {
+    // Adicionar mensagens para garantir que messagesHeight é positivo
+    for (let i = 0; i < 20; i++) {
+      layout.messageList.addMessage({
+        id: `${i}`, role: 'user', content: `Msg ${i}`, timestamp: new Date(),
+      });
+    }
+    // Render sem slot
+    const linesBefore = layout.render(80, 20);
+    expect(linesBefore).toHaveLength(20);
+
+    // Render com slot de 3 linhas
+    const slot = createFakePermSlot(['perm-line-1', 'perm-line-2', 'perm-line-3'], true);
+    layout.setPermissionDialog(slot);
+    const linesAfter = layout.render(80, 20);
+    expect(linesAfter).toHaveLength(20);
+
+    // As 3 linhas do slot devem aparecer
+    const stripped = linesAfter.map(l => stripAnsi(l));
+    expect(stripped.filter(l => l.includes('perm-line-')).length).toBe(3);
+  });
+
+  test('linhas do permissionSlot aparecem entre toast e input', () => {
+    const toast = new Toast();
+    layout.setToast(toast);
+    toast.show({ type: 'mode', label: 'Autopilot', duration: 0 });
+
+    const slot = createFakePermSlot(['PERM-DIALOG'], true);
+    layout.setPermissionDialog(slot);
+
+    const lines = layout.render(80, 20).map(l => stripAnsi(l));
+
+    const toastIdx = lines.findIndex(l => l.includes('Autopilot'));
+    const permIdx = lines.findIndex(l => l.includes('PERM-DIALOG'));
+    // find inputBar separator
+    let separatorIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].includes('─')) { separatorIdx = i; break; }
+    }
+
+    expect(toastIdx).toBeGreaterThanOrEqual(0);
+    expect(permIdx).toBeGreaterThan(toastIdx);
+    expect(permIdx).toBeLessThan(separatorIdx);
+
+    toast.dispose();
+  });
+
+  test('handleKey delega ao permissionSlot quando ativo (lineCount > 0)', () => {
+    const slot = createFakePermSlot(['dialog line'], true);
+    layout.setPermissionDialog(slot);
+    layout.inputBar.onFocus();
+
+    // A tecla deve ser consumida pelo slot, não pelo inputBar
+    const result = layout.handleKey(mkKey('y'));
+    expect(result).toBe(true);
+    expect(layout.inputBar.getValue()).toBe('');
+  });
+
+  test('handleKey NÃO delega ao permissionSlot quando inativo (lineCount === 0)', () => {
+    const slot = createFakePermSlot([], false);
+    layout.setPermissionDialog(slot);
+    layout.inputBar.onFocus();
+
+    // A tecla deve ir para o inputBar
+    layout.handleKey(mkKey('z'));
+    expect(layout.inputBar.getValue()).toBe('z');
+  });
+
+  test('minHeight cresce com permissionSlot ativo', () => {
+    const baseHeight = layout.minHeight();
+    const slot = createFakePermSlot(['a', 'b'], true);
+    layout.setPermissionDialog(slot);
+    expect(layout.minHeight()).toBe(baseHeight + 2);
+  });
+
+  test('setPermissionDialog(null) remove o slot', () => {
+    const slot = createFakePermSlot(['PERM'], true);
+    layout.setPermissionDialog(slot);
+    layout.setPermissionDialog(null);
+    const lines = layout.render(80, 20);
+    expect(lines).toHaveLength(20);
+    const hasPerm = lines.some(l => l.includes('PERM'));
+    expect(hasPerm).toBe(false);
   });
 });
