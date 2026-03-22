@@ -10,7 +10,6 @@ export interface Theme {
   readonly textMuted: string;
   readonly selectedBg: string;
   readonly selectedFg: string;
-  readonly selectedBorder: string;
   readonly itemFg: string;
   readonly groupLabelFg: string;
   readonly countFg: string;
@@ -45,7 +44,6 @@ export const theme: Theme = {
   // Item selecionado
   selectedBg: bg(20, 32, 45),
   selectedFg: fg(34, 211, 238),
-  selectedBorder: '▎',
 
   // Item normal (listas)
   itemFg: fg(126, 143, 160),
@@ -80,3 +78,6 @@ export const theme: Theme = {
   // Footer/hints
   hintsFg: fg(61, 90, 110),
 };
+
+/** Caractere visual para borda de item selecionado (não é sequência ANSI). */
+export const SELECTED_BORDER = '▎';

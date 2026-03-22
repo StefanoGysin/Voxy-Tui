@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { theme } from './theme';
+import { theme, SELECTED_BORDER } from './theme';
 
 describe('theme', () => {
   const expectedKeys = [
     'panelBg', 'panelHeaderBg',
     'borderFg',
     'titleFg', 'textFg', 'textDim', 'textMuted',
-    'selectedBg', 'selectedFg', 'selectedBorder',
+    'selectedBg', 'selectedFg',
     'itemFg',
     'groupLabelFg',
     'countFg',
@@ -38,11 +38,14 @@ describe('theme', () => {
   });
 
   it('ANSI values contain escape sequences', () => {
-    const ansiKeys = expectedKeys.filter(k => k !== 'selectedBorder');
-    for (const key of ansiKeys) {
+    for (const key of expectedKeys) {
       const value = theme[key as keyof typeof theme];
       expect(value).toContain('\x1b');
     }
+  });
+
+  it('SELECTED_BORDER is the ▎ character', () => {
+    expect(SELECTED_BORDER).toBe('▎');
   });
 
   it('key semantic values exist and are strings', () => {

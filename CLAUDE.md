@@ -116,12 +116,12 @@ input.onChange?: (text: string) => void
 // setPermissionDialog(slot: PermissionDialogSlot | null): void — slot entre toast e status
 // PermissionDialogSlot: { render(width): string[], handleKey(event): boolean, lineCount(): number, handleMouse?(event): boolean }
 // Quando ativo (lineCount > 0), handleKey delega ao slot com prioridade sobre scroll e inputBar
-// handleClick roteia clicks na área do permission dialog para handleMouse (com coordenadas localizadas)
+// handleMouse roteia clicks na área do permission dialog para handleMouse do slot (com coordenadas localizadas)
 // hasActivePermissionDialog(): boolean — retorna true se o slot está ativo (lineCount > 0)
 // setSidebar(sidebar: Sidebar | null): void — sidebar à direita do chat (~30% width, min 28, max 40)
 // toggleSidebarFocus(): void — alterna foco entre chat e sidebar
 // isSidebarFocused(): boolean — retorna se sidebar tem foco
-// handleClick(event: MouseClickEvent): boolean — delega click para sidebar ou messageList
+// handleMouse(event: MouseClickEvent): boolean — delega click para sidebar ou messageList
 // handleDrag(event: MouseDragEvent): boolean — delega drag para sidebar
 ```
 

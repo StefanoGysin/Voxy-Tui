@@ -308,6 +308,52 @@ describe('Sidebar', () => {
       s.setVisible(true);
       expect(s.handleMouse?.({ x: 5, y: 1, button: 0, isRelease: false })).toBe(true);
     });
+
+    it('tab click activates correct tab with 3 tabs', () => {
+      const s = new Sidebar();
+      s.addTab(makeTab({ id: 'a', label: 'Alfa' }));
+      s.addTab(makeTab({ id: 'b', label: 'Beta' }));
+      s.addTab(makeTab({ id: 'c', label: 'Gama' }));
+      s.setVisible(true);
+      s.render(40, 10); // populate lastInnerWidth
+
+      // Tab layout (renderTabs): accum starts at 1
+      // Tab A: " Alfa" → visual=5, range [1..5]  accum→6, +1 sep→7
+      // Tab B: " Beta" → visual=5, range [7..11] accum→12, +1 sep→13
+      // Tab C: " Gama" → visual=5, range [13..17]
+
+      // Click col must account for border (x=col+1 in handleMouse since col=event.x-1)
+      // handleMouse: col = event.x - 1, row 3 = tab zone for multi-tab
+
+      // Click on tab A (col=2 → x=3)
+      s.handleMouse({ x: 3, y: 3, button: 0, isRelease: false });
+      expect(s.getActiveTabId()).toBe('a');
+
+      // Click on tab B (col=8 → x=9)
+      s.handleMouse({ x: 9, y: 3, button: 0, isRelease: false });
+      expect(s.getActiveTabId()).toBe('b');
+
+      // Click on tab C (col=14 → x=15)
+      s.handleMouse({ x: 15, y: 3, button: 0, isRelease: false });
+      expect(s.getActiveTabId()).toBe('c');
+    });
+
+    it('tab click does not activate overflow tab', () => {
+      const s = new Sidebar();
+      // Width 20 → innerWidth 19. Tab labels that overflow should not be clickable.
+      s.addTab(makeTab({ id: 'a', label: 'LongTabA' }));
+      s.addTab(makeTab({ id: 'b', label: 'LongTabB' }));
+      s.addTab(makeTab({ id: 'c', label: 'LongTabC' }));
+      s.setVisible(true);
+      s.render(20, 10); // narrow: some tabs won't fit
+
+      // Start at tab A
+      expect(s.getActiveTabId()).toBe('a');
+
+      // Click at a far column where overflowed tabs would be — should NOT change tab
+      s.handleMouse({ x: 18, y: 3, button: 0, isRelease: false });
+      expect(s.getActiveTabId()).toBe('a');
+    });
   });
 
   describe('custom options', () => {
