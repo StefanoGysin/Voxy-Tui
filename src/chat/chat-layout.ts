@@ -61,7 +61,7 @@ export class ChatLayout implements Component {
   }
 
   /**
-   * Define o PermissionDialogSlot a ser renderizado entre toast e inputBar.
+   * Define o PermissionDialogSlot a ser renderizado entre toast e statusBar.
    * Passe null para remover.
    */
   setPermissionDialog(slot: PermissionDialogSlot | null): void {
