@@ -50,6 +50,8 @@ export class Renderer {
     if (firstDiff === -1) return;
 
     // 6. Se mais de 15% das linhas mudaram, full redraw é mais eficiente
+    // que diff line-level. Calibrado para permission dialog (~27% de mudança típica).
+    // TODO: considerar threshold adaptativo por componente se performance for problema.
     const changedCount = lastDiff - firstDiff + 1;
     if (changedCount > currentLines.length * 0.15) {
       const output = SYNC_START + ERASE_SCREEN + cursorTo(1, 1) +

@@ -70,6 +70,7 @@ export class Sidebar implements Component {
   private readonly bgColor: string;
   private readonly title: string;
   private readonly closeHint: string;
+  private lastInnerWidth = 0;
 
   onVisibilityChange?: (visible: boolean) => void;
   onUpdate?: () => void;
@@ -79,7 +80,7 @@ export class Sidebar implements Component {
     this.headerBg = options?.headerBg ?? theme.panelHeaderBg;
     this.titleFg = options?.titleFg ?? theme.titleFg;
     this.tabActiveFg = options?.tabActiveFg ?? theme.selectedFg;
-    this.tabInactiveFg = options?.tabInactiveFg ?? theme.textDim;
+    this.tabInactiveFg = options?.tabInactiveFg ?? theme.textDim; // NB: deliberadamente usa textDim; considerar token dedicado se textDim mudar
     this.hintsFg = options?.hintsFg ?? theme.hintsFg;
     this.bgColor = options?.bgColor ?? theme.panelBg;
     this.title = options?.title ?? 'Configurações';
@@ -132,6 +133,7 @@ export class Sidebar implements Component {
     }
 
     const innerWidth = width - 1; // -1 para borda │ esquerda
+    this.lastInnerWidth = innerWidth;
     const contentWidth = Math.max(1, innerWidth - CONTENT_PAD * 2);
 
     const lines: string[] = [];
@@ -400,23 +402,27 @@ export class Sidebar implements Component {
   }
 
   private handleTabClick(col: number): void {
-    // Simplificação: dividir igualmente o espaço entre tabs
     if (this.tabs.length === 0) return;
-    const tabWidth = Math.floor(col / Math.max(1, Math.ceil(col / this.tabs.length)));
-    // Calcular posição acumulada de cada tab
-    let accum = 1; // 1 space padding
+    // Espelha exatamente o cálculo de renderTabs
+    let accum = 1; // 1 space padding (matches renderTabs visualLen init)
     for (let i = 0; i < this.tabs.length; i++) {
       const tab = this.tabs[i];
-      const labelLen = measureWidth(tab.label) + 2; // padding around label
-      const badgeLen = tab.badge ? measureWidth(tab.badge) + 1 : 0;
-      const tabLen = labelLen + badgeLen + 1; // +1 separator
-
-      if (col >= accum && col < accum + tabLen) {
+      // Calcular exatamente como renderTabs faz
+      let tabLabel = ` ${tab.label}`;
+      if (tab.badge) tabLabel += ` ${tab.badge}`;
+      const tabVisual = measureWidth(tabLabel);
+      // Overflow check — espelha renderTabs break condition
+      if (accum + tabVisual + 1 > this.lastInnerWidth) break;
+      if (col >= accum && col < accum + tabVisual) {
         this.activeTabIndex = i;
         this.contentScrollOffset = 0;
         return;
       }
-      accum += tabLen;
+      accum += tabVisual;
+      // Separador entre tabs (matches renderTabs)
+      if (i < this.tabs.length - 1) {
+        accum += 1;
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
 export { ESC, bg, clipboardOSC52 } from './ansi';
-export { theme } from './theme';
+export { theme, SELECTED_BORDER } from './theme';
 export type { Theme } from './theme';
 export type { Terminal } from './terminal';
 export { ProcessTerminal } from './terminal';
