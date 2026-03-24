@@ -80,7 +80,9 @@ export class Markdown implements Component {
           lines.push(`${FG_GRAY}── ${t.lang} ──${RESET}`);
         }
         const highlighted = highlightCode(t.text, t.lang ?? '');
-        for (const line of highlighted.split('\n')) {
+        for (const raw of highlighted.split('\n')) {
+          // Sanitizar tabs — code blocks frequentemente usam tab indentation
+          const line = raw.includes('\t') ? raw.replace(/\t/g, '  ') : raw;
           lines.push(`  ${line}`);
         }
         lines.push('');
