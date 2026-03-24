@@ -3,6 +3,7 @@ import { MessageList } from './message-list';
 import type { ChatMessage } from './types';
 import { stripAnsi } from '../utils/strip-ansi';
 import { BOLD, FG_CYAN } from '../core/ansi';
+import { theme } from '../core/theme';
 
 function makeMsg(id: string, role: ChatMessage['role'], content: string): ChatMessage {
   return { id, role, content, timestamp: new Date('2025-01-01T10:00:00') };
@@ -88,8 +89,8 @@ describe('MessageList — tool messages', () => {
     const lines = list.render(80, 10);
     const joined = stripAnsi(lines.join('\n'));
     expect(joined).toContain('Bash');
+    // Collapsed: 1 linha com summary (cmd: date aparece no summary do Bash)
     expect(joined).toContain('cmd: date');
-    expect(joined).toContain('Fri, Mar 13');
   });
 
   test('render retorna exatamente height linhas com tool message', () => {
@@ -109,30 +110,30 @@ describe('MessageList — tool messages', () => {
     expect(joined).toContain('✗');
   });
 
-  test('output grande é colapsado por default (3 linhas visíveis)', () => {
+  test('output grande é colapsado por default (1 linha)', () => {
     const output = ['a', 'b', 'c', 'd', 'e', 'f'];
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
-    const joined = stripAnsi(list.render(80, 20).join('\n'));
-    expect(joined).toContain('a');
-    expect(joined).toContain('b');
-    expect(joined).toContain('c');
+    const lines = list.render(80, 20);
+    const joined = stripAnsi(lines.join('\n'));
+    // Collapsed = 1 linha, output não aparece
+    expect(joined).toContain('Bash');
+    expect(joined).toContain('Ctrl+E expandir');
     const dIndex = joined.split('\n').findIndex(l => l.trim() === 'd');
     expect(dIndex).toBe(-1);
-    expect(joined).toContain('linhas ocultas');
   });
 
-  test('output pequeno (≤ 3) não mostra hint de truncamento', () => {
+  test('todas as tools mostram hint Ctrl+E expandir', () => {
     list.addToolMessage('1', 'Bash', 'cmd: date', ['Fri, Mar 13'], 'done');
     const joined = stripAnsi(list.render(80, 10).join('\n'));
-    expect(joined).not.toContain('linhas ocultas');
-    expect(joined).not.toContain('click');
+    expect(joined).toContain('Ctrl+E expandir');
   });
 
-  test('output grande mostra hint click', () => {
+  test('tool expandida mostra hint Ctrl+E recolher', () => {
     const output = Array.from({ length: 10 }, (_, i) => `line ${i}`);
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
+    list.toggleLastTruncatedTool(); // expand
     const joined = stripAnsi(list.render(80, 30).join('\n'));
-    expect(joined).toContain('click');
+    expect(joined).toContain('Ctrl+E recolher');
   });
 
   test('toggleLastTruncatedTool expande output', () => {
@@ -149,15 +150,17 @@ describe('MessageList — tool messages', () => {
   test('toggleLastTruncatedTool recolhe após expand', () => {
     const output = ['a', 'b', 'c', 'd', 'e'];
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
-    list.toggleLastTruncatedTool();
-    list.toggleLastTruncatedTool();
+    list.toggleLastTruncatedTool(); // expand
+    list.toggleLastTruncatedTool(); // collapse
     const joined = stripAnsi(list.render(80, 20).join('\n'));
-    expect(joined).toContain('linhas ocultas');
+    // Collapsed: 1 linha, output não visível
+    expect(joined).toContain('Ctrl+E expandir');
+    expect(joined).not.toContain('Ctrl+E recolher');
   });
 
-  test('toggleLastTruncatedTool retorna false sem tools truncadas', () => {
+  test('toggleLastTruncatedTool retorna true para qualquer tool', () => {
     list.addToolMessage('1', 'Bash', 'cmd: date', ['single line'], 'done');
-    expect(list.toggleLastTruncatedTool()).toBe(false);
+    expect(list.toggleLastTruncatedTool()).toBe(true);
   });
 
   test('toggleLastTruncatedTool age na tool mais recente', () => {
@@ -246,7 +249,7 @@ describe('MessageList — handleMouse', () => {
     expect(consumed).toBe(false);
   });
 
-  test('clique em tool com poucas linhas (não truncado) → não consome', () => {
+  test('clique em qualquer tool → toggle (todas são togglable)', () => {
     const list = new MessageList();
     const msg = makeTool('1', 2);
     list.addMessage(msg);
@@ -254,7 +257,8 @@ describe('MessageList — handleMouse', () => {
     const headerLineIdx = lines.findIndex(l => stripAnsi(l).includes('TestTool'));
     expect(headerLineIdx).toBeGreaterThanOrEqual(0);
     const consumed = list.handleMouse({ x: 5, y: headerLineIdx + 1, button: 0, isRelease: true });
-    expect(consumed).toBe(false);
+    expect(consumed).toBe(true);
+    expect(msg.toolCollapsed).toBe(false);
   });
 
   test('clique fora da área de conteúdo (padding) → não consome', () => {
@@ -537,10 +541,10 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
     // Toda linha de conteúdo deve ter │ como primeiro char após stripAnsi
     expect(contentLines.every(l => stripAnsi(l)[0] === '│')).toBe(true);
-    // Deve haver linhas com FG_GREEN│ (user) e FG_CYAN│ (assistant)
+    // Deve haver linhas com theme.successFg│ (user) e theme.selectedFg│ (assistant)
     const joined = lines.join('\n');
-    expect(joined).toContain('\x1b[32m│');   // FG_GREEN│ (user)
-    expect(joined).toContain('\x1b[36m│');   // FG_CYAN│ (assistant)
+    expect(joined).toContain(theme.successFg + '│');   // user border (green)
+    expect(joined).toContain(theme.selectedFg + '│');   // assistant border (cyan)
   });
 
   test('linhas têm visual width = width (sem colunas de scrollbar)', () => {
@@ -558,14 +562,14 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     }
   });
 
-  test('separador - entre mensagens', () => {
+  test('separador ─ entre mensagens', () => {
     const list = new MessageList();
     list.addMessage({ id: '1', role: 'user', content: 'hello', timestamp: new Date() });
     list.addMessage({ id: '2', role: 'assistant', content: 'hi', timestamp: new Date() });
     const lines = list.render(30, 10);
     const stripped = lines.map(l => stripAnsi(l));
-    // Deve ter linhas com ── (separador)
-    const separatorLines = stripped.filter(l => l.includes('--'));
+    // Deve ter linhas com ── (separador box-drawing)
+    const separatorLines = stripped.filter(l => l.includes('──'));
     expect(separatorLines.length).toBeGreaterThanOrEqual(2); // 1 por mensagem
   });
 });
@@ -584,8 +588,8 @@ describe('MessageList — scrollbar', () => {
     // Sem overflow → sem SCROLLBAR_SEP (│ dim) nas linhas de conteúdo
     const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
     for (const line of contentLines) {
-      // Não deve conter o separador dim │ do scrollbar (236m│)
-      expect(line).not.toContain('\x1b[38;5;236m│');
+      // Não deve conter o separador dim │ do scrollbar
+      expect(line).not.toContain(theme.scrollbarSepFg + '│');
     }
   });
 
@@ -593,9 +597,9 @@ describe('MessageList — scrollbar', () => {
     const list = new MessageList();
     makeMany(list, 30);
     const lines = list.render(40, 5);
-    // Overflow → cada linha deve conter SCROLLBAR_SEP
+    // Overflow → cada linha deve conter SCROLLBAR_SEP (theme.scrollbarSepFg + │)
     for (const line of lines) {
-      expect(line).toContain('\x1b[38;5;236m│');
+      expect(line).toContain(theme.scrollbarSepFg + '│');
     }
   });
 

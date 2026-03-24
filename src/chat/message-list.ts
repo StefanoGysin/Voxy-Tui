@@ -1,8 +1,9 @@
 import type { Component, MouseClickEvent, MouseDragEvent } from '../core/component';
 import type { ChatMessage } from './types';
-import { RESET, BOLD, DIM, ITALIC, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED, FG_YELLOW } from '../core/ansi';
+import { RESET, BOLD, DIM, ITALIC } from '../core/ansi';
+import { theme } from '../core/theme';
 import { wrapText } from '../utils/wrap';
-import { padEndAnsi, byteIndexAtVisualCol, measureWidth } from '../utils/width';
+import { padEndAnsi, byteIndexAtVisualCol, measureWidth, fitWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 import { renderMarkdown } from './markdown';
 import { ThinkingBlock } from './thinking-block';
@@ -11,97 +12,230 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-const TOOL_COLLAPSED_OUTPUT_LINES = 3;
-
-// Scrollbar
 // Seleção de texto — blue background (preserva cores originais fora da seleção)
 const SEL_HL  = '\x1b[44m';  // blue background (standard, todos os terminais)
 const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/etc.)
 
-// Scrollbar — separador + background color
-const SCROLLBAR_SEP   = '\x1b[38;5;236m│\x1b[0m';
-const SCROLLBAR_THUMB = '\x1b[48;5;240m\x1b[38;5;248m▐\x1b[0m';
-const SCROLLBAR_TRACK = '\x1b[48;5;234m\x1b[38;5;237m╎\x1b[0m';
-const SCROLLBAR_HINT_BORDER = '\x1b[38;5;237m│\x1b[0m';
+// Scrollbar — usando theme TrueColor
+const SCROLLBAR_SEP   = `${theme.scrollbarSepFg}│${RESET}`;
+const SCROLLBAR_THUMB = `${theme.scrollbarThumbBg}${theme.scrollbarThumbFg}▐${RESET}`;
+const SCROLLBAR_TRACK = `${theme.scrollbarTrackBg}${theme.scrollbarTrackFg}╎${RESET}`;
+const SCROLLBAR_HINT_BORDER = `${theme.scrollbarSepFg}│${RESET}`;
 const MARGIN_LEFT = 2;  // espaço de respiração à esquerda do conteúdo
 const SCROLLBAR_PAGE_LINES = 10;
 
 /** Retorna o caractere ANSI colorido de borda esquerda para a role dada. */
 function getMsgBorderAnsi(role: ChatMessage['role']): string {
   switch (role) {
-    case 'user':      return `${FG_GREEN}│${RESET}`;
-    case 'assistant': return `${FG_CYAN}│${RESET}`;
-    case 'system':    return `${FG_GRAY}│${RESET}`;
-    case 'tool':      return `${FG_YELLOW}│${RESET}`;
-    default:          return `${FG_GRAY}│${RESET}`;
+    case 'user':      return `${theme.successFg}│${RESET}`;
+    case 'assistant': return `${theme.selectedFg}│${RESET}`;
+    case 'system':    return `${theme.textDim}│${RESET}`;
+    case 'tool':      return `${theme.warningFg}│${RESET}`;
+    default:          return `${theme.textDim}│${RESET}`;
+  }
+}
+
+/** Retorna a cor ANSI para o nome de uma tool. */
+function getToolNameColor(name: string): string {
+  switch (name) {
+    case 'Read': case 'Glob': case 'Grep': return theme.selectedFg;
+    case 'Edit': case 'Write': return theme.successFg;
+    case 'Bash': return theme.warningFg;
+    default: return theme.textDim;
+  }
+}
+
+/** Extrai basename de um caminho de arquivo. */
+function basename(filePath: string): string {
+  // Suportar tanto / quanto \ como separador
+  const parts = filePath.replace(/\\/g, '/').split('/');
+  return parts[parts.length - 1] || filePath;
+}
+
+/** Gera summary inteligente para uma tool message (1 linha). */
+function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
+  const raw = msg.toolRawInput;
+  const output = msg.toolOutput ?? [];
+  const name = msg.toolName ?? '';
+
+  switch (name) {
+    case 'Read': {
+      const filePath = (raw?.file_path as string) ?? '';
+      const base = filePath ? basename(filePath) : '';
+      const lineCount = output.length;
+      const summary = base
+        ? `${base} · ${lineCount} linhas`
+        : (msg.toolInput ?? '');
+      return stripAnsi(fitWidth(summary, maxWidth));
+    }
+
+    case 'Glob': {
+      const pattern = (raw?.pattern as string) ?? '';
+      const count = output.length;
+      const summary = pattern
+        ? `${count} arquivos · ${pattern}`
+        : `${count} arquivos`;
+      return stripAnsi(fitWidth(summary, maxWidth));
+    }
+
+    case 'Grep': {
+      const pattern = (raw?.pattern as string) ?? '';
+      const count = output.length;
+      const summary = pattern
+        ? `${count} matches · "${pattern}"`
+        : `${count} matches`;
+      return stripAnsi(fitWidth(summary, maxWidth));
+    }
+
+    case 'Bash': {
+      const command = (raw?.command as string) ?? msg.toolInput ?? '';
+      return stripAnsi(fitWidth(command, maxWidth));
+    }
+
+    case 'Edit': {
+      const filePath = (raw?.file_path as string) ?? '';
+      const base = filePath ? basename(filePath) : '';
+      const oldStr = (raw?.old_string as string) ?? '';
+      const newStr = (raw?.new_string as string) ?? '';
+      const oldLines = oldStr ? oldStr.split('\n').length : 0;
+      const newLines = newStr ? newStr.split('\n').length : 0;
+      const summary = base
+        ? `${base} · −${oldLines} +${newLines}`
+        : (msg.toolInput ?? '');
+      return stripAnsi(fitWidth(summary, maxWidth));
+    }
+
+    case 'Write': {
+      const filePath = (raw?.file_path as string) ?? '';
+      const base = filePath ? basename(filePath) : '';
+      const content = (raw?.content as string) ?? '';
+      const lineCount = content ? content.split('\n').length : output.length;
+      const outputJoined = output.join(' ').toLowerCase();
+      const action = outputJoined.includes('already exists') || outputJoined.includes('sobrescrev')
+        ? 'Sobrescreveu'
+        : 'Criou';
+      const summary = base
+        ? `${action} ${base} · ${lineCount} linhas`
+        : (msg.toolInput ?? '');
+      return stripAnsi(fitWidth(summary, maxWidth));
+    }
+
+    default: {
+      const fallback = msg.toolInput ?? '';
+      return stripAnsi(fitWidth(fallback, maxWidth));
+    }
   }
 }
 
 function renderToolMessage(msg: ChatMessage, width: number): string[] {
   const name = msg.toolName ?? 'Tool';
-  const input = msg.toolInput ?? '';
   const output = msg.toolOutput ?? [];
   const status = msg.toolStatus ?? 'done';
-  const isTruncated = output.length > TOOL_COLLAPSED_OUTPUT_LINES;
   const collapsed = msg.toolCollapsed !== false;
 
   const icon = status === 'done'
-    ? `${FG_GREEN}✓${RESET}`
-    : `${FG_RED}✗${RESET}`;
+    ? `${theme.successFg}✓${RESET}`
+    : `${theme.dangerFg}✗${RESET}`;
 
-  const HINT_EXPAND = `${FG_GRAY}${DIM}click expandir${RESET}`;
-  const HINT_COLLPS = `${FG_GRAY}${DIM}click recolher${RESET}`;
-  const hintText = isTruncated
-    ? (collapsed ? 'click expandir' : 'click recolher')
-    : '';
-  const hintAnsi = isTruncated
-    ? (collapsed ? HINT_EXPAND : HINT_COLLPS)
-    : '';
+  const nameColor = getToolNameColor(name);
+  const nameAnsi = `${nameColor}${BOLD}${name}${RESET}`;
 
-  const headerLeft = `${icon} ${FG_CYAN}${BOLD}${name}${RESET}`;
-  const header = hintText
-    ? padEndAnsi(headerLeft, width - hintText.length) + hintAnsi
-    : headerLeft;
+  const hintExpandText = 'Ctrl+E expandir';
+  const hintCollapseText = 'Ctrl+E recolher';
+
+  if (collapsed) {
+    // 1-line collapsed: icon + name + summary ... hint
+    const hintText = hintExpandText;
+    const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
+    // Overhead: "✓ " (2) + name + "  " (2) + hint
+    const nameWidth = measureWidth(name);
+    const summaryMaxWidth = Math.max(1, width - 2 - nameWidth - 2 - hintText.length - 1);
+    const summary = generateToolSummary(msg, summaryMaxWidth);
+    const leftPart = `${icon} ${nameAnsi}  ${theme.textDim}${summary}${RESET}`;
+    return [padEndAnsi(leftPart, width - hintText.length) + hintAnsi];
+  }
+
+  // Expanded view
+  const hintText = hintCollapseText;
+  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
+  const nameWidth = measureWidth(name);
+  const summaryMaxWidth = Math.max(1, width - 2 - nameWidth - 2 - hintText.length - 1);
+  const summary = generateToolSummary(msg, summaryMaxWidth);
+  const headerLeft = `${icon} ${nameAnsi}  ${theme.textDim}${summary}${RESET}`;
+  const header = padEndAnsi(headerLeft, width - hintText.length) + hintAnsi;
 
   const lines: string[] = [header];
 
-  if (input) {
-    lines.push(`  ${FG_GRAY}${DIM}${input}${RESET}`);
+  // Input details
+  const raw = msg.toolRawInput;
+  if (raw) {
+    for (const [key, value] of Object.entries(raw)) {
+      const valStr = typeof value === 'string' ? value : JSON.stringify(value);
+      // Truncar valor longo em 1 linha
+      const maxValWidth = Math.max(1, width - key.length - 4); // "  key: "
+      const truncated = stripAnsi(fitWidth(valStr.split('\n')[0], maxValWidth));
+      lines.push(`  ${theme.textDim}${key}: ${truncated}${RESET}`);
+    }
+  } else if (msg.toolInput) {
+    lines.push(`  ${theme.textDim}${msg.toolInput}${RESET}`);
   }
 
+  // Separador fino entre input e output
+  lines.push(`  ${theme.borderFg}${'─'.repeat(Math.max(0, width - 2))}${RESET}`);
+
+  // Output completo
   if (output.length > 0) {
-    const visibleOutput = (isTruncated && collapsed)
-      ? output.slice(0, TOOL_COLLAPSED_OUTPUT_LINES)
-      : output;
+    const isEdit = name === 'Edit';
+    const isWrite = name === 'Write';
 
-    lines.push(`${FG_GRAY}└${RESET} ${visibleOutput[0]}`);
-    for (let i = 1; i < visibleOutput.length; i++) {
-      lines.push(`  ${visibleOutput[i]}`);
-    }
+    for (const outLine of output) {
+      const wrapped = wrapText(outLine, width);
+      for (let wi = 0; wi < wrapped.length; wi++) {
+        let renderedLine: string;
+        if (wi === 0) {
+          renderedLine = wrapped[wi];
+        } else {
+          renderedLine = `${theme.textDim}↳${RESET} ${wrapped[wi]}`;
+        }
 
-    if (isTruncated && collapsed) {
-      const hidden = output.length - TOOL_COLLAPSED_OUTPUT_LINES;
-      lines.push(`  ${FG_GRAY}${DIM}··· +${hidden} linhas ocultas${RESET}`);
+        // Colorir linhas de diff para Edit
+        if (isEdit) {
+          const stripped = stripAnsi(renderedLine);
+          if (stripped.startsWith('-') || stripped.startsWith('< ')) {
+            renderedLine = `${theme.diffDelFg}${stripped}${RESET}`;
+          } else if (stripped.startsWith('+') || stripped.startsWith('> ')) {
+            renderedLine = `${theme.diffAddFg}${stripped}${RESET}`;
+          }
+        }
+
+        // Colorir linhas de Write em verde
+        if (isWrite) {
+          const stripped = stripAnsi(renderedLine);
+          renderedLine = `${theme.diffAddFg}+ ${stripped}${RESET}`;
+        }
+
+        lines.push(renderedLine);
+      }
     }
   }
 
-  lines.push(`${FG_GRAY}${DIM}${'-'.repeat(width)}${RESET}`);
+  // SEM separador trailing — gerenciado por buildAllLines
   return lines;
 }
 
 function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: ThinkingBlock): string[] {
   let header: string;
-  const time = `${FG_GRAY}${DIM}${formatTime(msg.timestamp)}${RESET}`;
+  const time = `${theme.textDim}${DIM}${formatTime(msg.timestamp)}${RESET}`;
 
   switch (msg.role) {
     case 'user':
-      header = `${FG_GREEN}${BOLD}⬥ You${RESET} ${time}`;
+      header = `${theme.successFg}${BOLD}⬥ You${RESET} ${time}`;
       break;
     case 'assistant':
-      header = `${FG_CYAN}${BOLD}✦ Assistant${RESET} ${time}`;
+      header = `${theme.selectedFg}${BOLD}✦ Assistant${RESET} ${time}`;
       break;
     case 'system':
-      header = `${FG_GRAY}${ITALIC}▸ System${RESET} ${time}`;
+      header = `${theme.textDim}${ITALIC}▸ System${RESET} ${time}`;
       break;
     case 'tool':
       return renderToolMessage(msg, width);
@@ -111,8 +245,16 @@ function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: Thinking
   const contentLines = msg.role === 'assistant'
     ? renderMarkdown(msg.content, width)
     : wrapText(msg.content, width);
-  const separator = `${FG_GRAY}${DIM}${'-'.repeat(width)}${RESET}`;
+  const separator = `${theme.borderFg}${DIM}${'─'.repeat(width)}${RESET}`;
   return [header, ...thinkingLines, ...contentLines, separator];
+}
+
+interface BuildResult {
+  lines: string[];
+  borders: string[];
+  thinkingMap: Map<number, ThinkingBlock>;
+  msgMap: (ChatMessage | null)[];
+  msgStartMap: Map<ChatMessage, number>;
 }
 
 export class MessageList implements Component {
@@ -162,6 +304,61 @@ export class MessageList implements Component {
       block.setContent(msg.thinkingContent);
     }
     return renderMessage(msg, width, block);
+  }
+
+  /**
+   * Constrói allLines com separadores corretos:
+   * - Tool messages: SEM separador trailing
+   * - Non-tool messages: COM separador trailing (incluído por renderMessage)
+   * - Transição tool→non-tool: injeta 1 linha de separador ─
+   */
+  private buildAllLines(textWidth: number): BuildResult {
+    const lines: string[] = [];
+    const borders: string[] = [];
+    const thinkingMap = new Map<number, ThinkingBlock>();
+    const msgMap: (ChatMessage | null)[] = [];
+    const msgStartMap = new Map<ChatMessage, number>();
+
+    let prevWasTool = false;
+
+    for (const msg of this.messages) {
+      const isTool = msg.role === 'tool';
+
+      // Transição tool→non-tool: injetar separador
+      if (prevWasTool && !isTool) {
+        const sep = `${theme.borderFg}${'─'.repeat(textWidth)}${RESET}`;
+        lines.push(sep);
+        borders.push(getMsgBorderAnsi('tool'));
+        msgMap.push(null);
+      }
+
+      msgStartMap.set(msg, lines.length);
+      const lineStart = lines.length;
+      const msgLines = this.renderMsg(msg, textWidth);
+
+      // Construir thinkingMap para mensagens assistant com thinking
+      if (msg.thinkingContent) {
+        const block = this.thinkingBlocks.get(msg);
+        if (block) {
+          const thinkingStart = lineStart + 1; // +1 pula header
+          const thinkingLineCount = block.render(textWidth, 10000).length;
+          for (let i = 0; i < thinkingLineCount; i++) {
+            thinkingMap.set(thinkingStart + i, block);
+          }
+        }
+      }
+
+      const borderChar = getMsgBorderAnsi(msg.role);
+      for (const line of msgLines) {
+        lines.push(line);
+        borders.push(borderChar);
+        msgMap.push(msg);
+      }
+
+      prevWasTool = isTool;
+    }
+
+    return { lines, borders, thinkingMap, msgMap, msgStartMap };
   }
 
   /**
@@ -234,8 +431,8 @@ export class MessageList implements Component {
     input: string,
     output: string[],
     status: 'done' | 'error',
+    rawInput?: Record<string, unknown>,
   ): void {
-    const collapsed = output.length > TOOL_COLLAPSED_OUTPUT_LINES;
     const msg: ChatMessage = {
       id,
       role: 'tool',
@@ -245,7 +442,8 @@ export class MessageList implements Component {
       toolInput: input,
       toolOutput: output,
       toolStatus: status,
-      toolCollapsed: collapsed,
+      toolCollapsed: true,
+      toolRawInput: rawInput,
     };
     this.messages.push(msg);
     if (this.stickyBottom) {
@@ -255,13 +453,8 @@ export class MessageList implements Component {
 
   toggleLastTruncatedTool(): boolean {
     for (let i = this.messages.length - 1; i >= 0; i--) {
-      const msg = this.messages[i];
-      if (
-        msg.role === 'tool' &&
-        msg.toolOutput !== undefined &&
-        msg.toolOutput.length > TOOL_COLLAPSED_OUTPUT_LINES
-      ) {
-        msg.toolCollapsed = !msg.toolCollapsed;
+      if (this.messages[i].role === 'tool') {
+        this.messages[i].toolCollapsed = !this.messages[i].toolCollapsed;
         return true;
       }
     }
@@ -298,11 +491,8 @@ export class MessageList implements Component {
       return
     }
 
-    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
-    const allLines: string[] = []
-    for (const msg of this.messages) {
-      allLines.push(...this.renderMsg(msg, textWidth))
-    }
+    const textWidth = width - 2 - MARGIN_LEFT
+    const { lines: allLines } = this.buildAllLines(textWidth)
     const total = allLines.length
 
     // Normalizar: garantir que from < to em allLines-index space
@@ -510,33 +700,23 @@ export class MessageList implements Component {
     const height = this.lastRenderHeight
     if (height <= 0 || width <= 0) return false
 
-    const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
+    const textWidth = width - 2 - MARGIN_LEFT
 
-    // Construir mapeamento linha → mensagem (para toggle de tool messages)
-    const lineToMsg: (ChatMessage | null)[] = []
-    const msgStartMap = new Map<ChatMessage, number>()
-    for (const msg of this.messages) {
-      msgStartMap.set(msg, lineToMsg.length)
-      const msgLines = this.renderMsg(msg, textWidth)
-      for (let i = 0; i < msgLines.length; i++) {
-        lineToMsg.push(msg)
-      }
-    }
+    // Usar buildAllLines para mapeamento consistente
+    const { msgMap, msgStartMap } = this.buildAllLines(textWidth)
 
-    // Usar lastAllLinesCount (total do último render) — não lineToMsg.length.
-    // Durante streaming, lineToMsg pode ter mais linhas que o último render,
+    // Usar lastAllLinesCount (total do último render) — não msgMap.length.
+    // Durante streaming, msgMap pode ter mais linhas que o último render,
     // causando padding errado em screenYToAllLineIdx e allLineIdx off-by-1.
-    // lineToMsg[allLineIdx] é seguro pois lineToMsg.length >= lastAllLinesCount.
     const renderTotal = this.lastAllLinesCount
     const allLineIdx = this.screenYToAllLineIdx(event.y, renderTotal, height)
 
     if (allLineIdx < 0 || allLineIdx >= renderTotal) return false
-    const msg = lineToMsg[allLineIdx]
+    const msg = msgMap[allLineIdx]
     if (!msg) return false
 
-    // === Click em tool message truncado → toggle collapsed ===
+    // === Click em tool message → toggle collapsed ===
     if (msg.role !== 'tool') return false
-    if ((msg.toolOutput?.length ?? 0) <= TOOL_COLLAPSED_OUTPUT_LINES) return false
 
     const wasCollapsed = msg.toolCollapsed !== false
     const oldLen = this.renderMsg(msg, textWidth).length
@@ -545,7 +725,7 @@ export class MessageList implements Component {
 
     const newLen = this.renderMsg(msg, textWidth).length
     const lineDelta = newLen - oldLen
-    const totalAfter = lineToMsg.length + lineDelta
+    const totalAfter = msgMap.length + lineDelta
     const msgStart = msgStartMap.get(msg) ?? 0
 
     if (wasCollapsed) {
@@ -629,9 +809,9 @@ export class MessageList implements Component {
     const bar: string[] = [];
     for (let i = 0; i < height; i++) {
       if (i >= thumbPos && i < thumbPos + thumbSize) {
-        bar.push(`\x1b[38;5;102m${SCROLLBAR_THUMB}${RESET}`);
+        bar.push(SCROLLBAR_THUMB);
       } else {
-        bar.push(`\x1b[38;5;238m${SCROLLBAR_TRACK}${RESET}`);
+        bar.push(SCROLLBAR_TRACK);
       }
     }
     return bar;
@@ -645,32 +825,9 @@ export class MessageList implements Component {
 
     const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
 
-    // Renderizar todas as mensagens com textWidth
-    const allLines: string[] = [];
-    const allLineBorders: string[] = [];
-    this.thinkingLineMap.clear();
-    for (const msg of this.messages) {
-      const lineStart = allLines.length;
-      const msgLines = this.renderMsg(msg, textWidth);
-
-      // Construir thinkingLineMap: ThinkingBlock ocupa linhas após o header da msg
-      if (msg.thinkingContent) {
-        const block = this.thinkingBlocks.get(msg);
-        if (block) {
-          const thinkingStart = lineStart + 1; // +1 pula header da msg
-          const thinkingLineCount = block.render(textWidth, 10000).length;
-          for (let i = 0; i < thinkingLineCount; i++) {
-            this.thinkingLineMap.set(thinkingStart + i, block);
-          }
-        }
-      }
-
-      const borderChar = getMsgBorderAnsi(msg.role);
-      for (const line of msgLines) {
-        allLines.push(line);
-        allLineBorders.push(borderChar);
-      }
-    }
+    // Renderizar todas as mensagens via buildAllLines
+    const { lines: allLines, borders: allLineBorders, thinkingMap } = this.buildAllLines(textWidth);
+    this.thinkingLineMap = thinkingMap;
     // Cachear count para uso em updateSelOnScroll() (scroll durante drag)
     this.lastAllLinesCount = allLines.length;
 
@@ -725,7 +882,7 @@ export class MessageList implements Component {
       const prefix = `▴ ${this.scrollOffset} linhas acima `;
       const prefixWidth = measureWidth(prefix);
       const dashCount = Math.max(0, textWidth - prefixWidth - 1);
-      const hintLine = `${FG_GRAY}${DIM}${prefix}${'-'.repeat(dashCount)}${RESET}`;
+      const hintLine = `${theme.textDim}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
       const hintRow = SCROLLBAR_HINT_BORDER + ' ' + padEndAnsi(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
 
       const contentSlice = allLines.slice(start, start + height - 1);
