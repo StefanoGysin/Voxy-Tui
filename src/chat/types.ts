@@ -13,4 +13,5 @@ export interface ChatMessage {
   toolOutput?: string[];
   toolStatus?: 'done' | 'error';
   toolCollapsed?: boolean;
+  toolRawInput?: Record<string, unknown>;
 }

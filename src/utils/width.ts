@@ -12,9 +12,11 @@ export function measureWidth(text: string): number {
  * Usa measureWidth(stripAnsi(line)) para medir a largura real.
  */
 export function padEndAnsi(line: string, targetWidth: number): string {
-  const visual = measureWidth(stripAnsi(line));
+  // Sanitizar tabs — string-width conta \t como 0 width
+  const sanitized = line.includes('\t') ? line.replace(/\t/g, '  ') : line;
+  const visual = measureWidth(stripAnsi(sanitized));
   const padding = Math.max(0, targetWidth - visual);
-  return line + ' '.repeat(padding);
+  return sanitized + ' '.repeat(padding);
 }
 
 /**
@@ -36,11 +38,13 @@ export function padEndAnsi(line: string, targetWidth: number): string {
  * o terminal faz line-wrap e toda a UI abaixo desalinha.
  */
 export function fitWidth(line: string, targetWidth: number): string {
-  const visual = measureWidth(stripAnsi(line))
+  // Sanitizar tabs — string-width conta \t como 0 width
+  const sanitized = line.includes('\t') ? line.replace(/\t/g, '  ') : line;
+  const visual = measureWidth(stripAnsi(sanitized))
 
-  if (visual === targetWidth) return line
+  if (visual === targetWidth) return sanitized
   if (visual < targetWidth) {
-    return line + ' '.repeat(targetWidth - visual)
+    return sanitized + ' '.repeat(targetWidth - visual)
   }
 
   // Truncar: percorrer caractere a caractere, preservando ANSI
@@ -49,10 +53,10 @@ export function fitWidth(line: string, targetWidth: number): string {
   let width = 0
   let i = 0
 
-  while (i < line.length && width < targetWidth) {
+  while (i < sanitized.length && width < targetWidth) {
     // Verificar sequência ANSI na posição i
     ansiRe.lastIndex = i
-    const m = ansiRe.exec(line)
+    const m = ansiRe.exec(sanitized)
     if (m !== null) {
       result += m[0]
       i += m[0].length
@@ -60,7 +64,7 @@ export function fitWidth(line: string, targetWidth: number): string {
     }
 
     // Caractere imprimível — tratar surrogate pairs
-    const cp = line.codePointAt(i)!
+    const cp = sanitized.codePointAt(i)!
     const cpLen = cp > 0xFFFF ? 2 : 1
     const ch = String.fromCodePoint(cp)
     const w = measureWidth(ch)
@@ -72,9 +76,9 @@ export function fitWidth(line: string, targetWidth: number): string {
   }
 
   // Capturar ANSI sequences restantes após o truncamento (ex: RESET)
-  while (i < line.length) {
+  while (i < sanitized.length) {
     ansiRe.lastIndex = i
-    const m = ansiRe.exec(line)
+    const m = ansiRe.exec(sanitized)
     if (m !== null && m.index === i) {
       result += m[0]
       i += m[0].length

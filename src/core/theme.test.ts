@@ -16,6 +16,12 @@ describe('theme', () => {
     'diffAddFg', 'diffAddBg', 'diffDelFg', 'diffDelBg', 'diffCtxFg',
     'separatorFg',
     'hintsFg',
+    'scrollbarThumbFg', 'scrollbarThumbBg',
+    'scrollbarTrackFg', 'scrollbarTrackBg',
+    'scrollbarSepFg',
+    'toastModeBg', 'toastSuccessBg', 'toastWarningBg', 'toastErrorBg', 'toastInfoBg',
+    'statusStreamingFg', 'statusErrorFg', 'statusIdleFg', 'statusModelFg', 'statusTokensFg',
+    'toolNameFg', 'toolRunningFg', 'toolDoneFg', 'toolErrorFg', 'toolLabelFg',
   ];
 
   it('exports all expected keys', () => {

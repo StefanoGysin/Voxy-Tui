@@ -25,6 +25,32 @@ export interface Theme {
   readonly diffCtxFg: string;
   readonly separatorFg: string;
   readonly hintsFg: string;
+  readonly scrollbarThumbFg: string;
+  readonly scrollbarThumbBg: string;
+  readonly scrollbarTrackFg: string;
+  readonly scrollbarTrackBg: string;
+  readonly scrollbarSepFg: string;
+
+  // Toast
+  readonly toastModeBg: string;
+  readonly toastSuccessBg: string;
+  readonly toastWarningBg: string;
+  readonly toastErrorBg: string;
+  readonly toastInfoBg: string;
+
+  // StatusBar
+  readonly statusStreamingFg: string;
+  readonly statusErrorFg: string;
+  readonly statusIdleFg: string;
+  readonly statusModelFg: string;
+  readonly statusTokensFg: string;
+
+  // ToolActivityLog
+  readonly toolNameFg: string;
+  readonly toolRunningFg: string;
+  readonly toolDoneFg: string;
+  readonly toolErrorFg: string;
+  readonly toolLabelFg: string;
 }
 
 export const theme: Theme = {
@@ -77,6 +103,34 @@ export const theme: Theme = {
 
   // Footer/hints
   hintsFg: fg(61, 90, 110),
+
+  // Scrollbar
+  scrollbarThumbFg: fg(168, 168, 168),
+  scrollbarThumbBg: bg(88, 88, 88),
+  scrollbarTrackFg: fg(58, 58, 58),
+  scrollbarTrackBg: bg(28, 28, 28),
+  scrollbarSepFg: fg(48, 48, 48),
+
+  // Toast
+  toastModeBg: bg(6, 182, 212),
+  toastSuccessBg: bg(22, 163, 74),
+  toastWarningBg: bg(202, 138, 4),
+  toastErrorBg: bg(220, 38, 38),
+  toastInfoBg: bg(37, 99, 235),
+
+  // StatusBar
+  statusStreamingFg: fg(234, 179, 8),
+  statusErrorFg: fg(239, 68, 68),
+  statusIdleFg: fg(139, 148, 158),
+  statusModelFg: fg(34, 211, 238),
+  statusTokensFg: fg(139, 148, 158),
+
+  // ToolActivityLog
+  toolNameFg: fg(34, 211, 238),
+  toolRunningFg: fg(234, 179, 8),
+  toolDoneFg: fg(74, 222, 128),
+  toolErrorFg: fg(239, 68, 68),
+  toolLabelFg: fg(139, 148, 158),
 };
 
 /** Caractere visual para borda de item selecionado (não é sequência ANSI). */
