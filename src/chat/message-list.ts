@@ -56,7 +56,8 @@ function basename(filePath: string): string {
 function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
   const raw = msg.toolRawInput;
   const output = msg.toolOutput ?? [];
-  const name = msg.toolName ?? '';
+  const rawName = msg.toolName ?? '';
+  const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
   switch (name) {
     case 'Read': {
@@ -128,7 +129,8 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
 }
 
 function renderToolMessage(msg: ChatMessage, width: number): string[] {
-  const name = msg.toolName ?? 'Tool';
+  const rawName = msg.toolName ?? 'Tool';
+  const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   const output = msg.toolOutput ?? [];
   const status = msg.toolStatus ?? 'done';
   const collapsed = msg.toolCollapsed !== false;
@@ -189,7 +191,9 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
     const isWrite = name === 'Write';
 
     for (const outLine of output) {
-      const wrapped = wrapText(outLine, width);
+      // Reservar espaço para indentação: 2 para geral, 4 para Write (2 indent + "+ ")
+      const maxLineWidth = isWrite ? Math.max(1, width - 4) : Math.max(1, width - 2);
+      const wrapped = wrapText(outLine, maxLineWidth);
       for (let wi = 0; wi < wrapped.length; wi++) {
         let renderedLine: string;
         if (wi === 0) {
@@ -214,7 +218,8 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
           renderedLine = `${theme.diffAddFg}+ ${stripped}${RESET}`;
         }
 
-        lines.push(renderedLine);
+        // Indentação de 2 espaços (alinhar com input)
+        lines.push(`  ${renderedLine}`);
       }
     }
   }
