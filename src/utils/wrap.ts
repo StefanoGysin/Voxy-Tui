@@ -4,9 +4,13 @@ import { stripAnsi } from './strip-ansi';
 export function wrapText(text: string, width: number): string[] {
   if (width <= 0) return [text];
 
+  // Sanitizar tabs — string-width conta \t como 0 width,
+  // mas terminal renderiza como 1-8 colunas visíveis
+  const clean = text.includes('\t') ? text.replace(/\t/g, '  ') : text;
+
   const result: string[] = [];
 
-  for (const logicalLine of text.split('\n')) {
+  for (const logicalLine of clean.split('\n')) {
     const visualLine = stripAnsi(logicalLine);
     if (measureWidth(visualLine) <= width) {
       result.push(logicalLine);
