@@ -112,9 +112,8 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
       const content = (raw?.content as string) ?? '';
       const lineCount = content ? content.split('\n').length : output.length;
       const outputJoined = output.join(' ').toLowerCase();
-      const action = outputJoined.includes('already exists') || outputJoined.includes('sobrescrev')
-        ? 'Sobrescreveu'
-        : 'Criou';
+      const isUpdate = outputJoined.includes('has been updated');
+      const action = isUpdate ? 'Sobrescreveu' : 'Criou';
       const summary = base
         ? `${action} ${base} · ${lineCount} linhas`
         : (msg.toolInput ?? '');
@@ -173,13 +172,16 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
   if (raw) {
     for (const [key, value] of Object.entries(raw)) {
       const valStr = typeof value === 'string' ? value : JSON.stringify(value);
+      // Sanitizar tabs para consistência de largura
+      const cleanVal = valStr.replace(/\t/g, '  ');
       // Truncar valor longo em 1 linha
       const maxValWidth = Math.max(1, width - key.length - 4); // "  key: "
-      const truncated = stripAnsi(fitWidth(valStr.split('\n')[0], maxValWidth));
-      lines.push(`  ${theme.textDim}${key}: ${truncated}${RESET}`);
+      const truncated = stripAnsi(fitWidth(cleanVal.split('\n')[0], maxValWidth));
+      lines.push(fitWidth(`  ${theme.textDim}${key}: ${truncated}${RESET}`, width));
     }
   } else if (msg.toolInput) {
-    lines.push(`  ${theme.textDim}${msg.toolInput}${RESET}`);
+    const cleanInput = (msg.toolInput ?? '').replace(/\t/g, '  ');
+    lines.push(fitWidth(`  ${theme.textDim}${cleanInput}${RESET}`, width));
   }
 
   // Separador fino entre input e output
@@ -190,10 +192,17 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
     const isEdit = name === 'Edit';
     const isWrite = name === 'Write';
 
+    // Write com "+ " prefix precisa de 4 chars de overhead (2 indent + 2 prefix)
+    // Demais precisam de 2 chars (indent)
+    const maxLineWidth = isWrite
+      ? Math.max(1, width - 4)
+      : Math.max(1, width - 2);
+
     for (const outLine of output) {
-      // Reservar espaço para indentação: 2 para geral, 4 para Write (2 indent + "+ ")
-      const maxLineWidth = isWrite ? Math.max(1, width - 4) : Math.max(1, width - 2);
-      const wrapped = wrapText(outLine, maxLineWidth);
+      // Sanitizar tabs — string-width conta tab como 0 width,
+      // mas terminal renderiza como 1-8 colunas visíveis
+      const cleanLine = outLine.replace(/\t/g, '  ');
+      const wrapped = wrapText(cleanLine, maxLineWidth);
       for (let wi = 0; wi < wrapped.length; wi++) {
         let renderedLine: string;
         if (wi === 0) {
@@ -212,14 +221,19 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
           }
         }
 
-        // Colorir linhas de Write em verde
+        // Colorir linhas de conteúdo para Write (não metadata)
         if (isWrite) {
           const stripped = stripAnsi(renderedLine);
-          renderedLine = `${theme.diffAddFg}+ ${stripped}${RESET}`;
+          // Linhas cat-n: espaços + dígitos + espaço (ex: "     1  content")
+          // Metadata: "File created...", "The file ... has been updated..."
+          const isCatNLine = /^\s*\d+\s/.test(stripped);
+          if (isCatNLine) {
+            renderedLine = `${theme.diffAddFg}+ ${stripped}${RESET}`;
+          }
         }
 
-        // Indentação de 2 espaços (alinhar com input)
-        lines.push(`  ${renderedLine}`);
+        // Indentação de 2 espaços + fitWidth para garantir largura exata
+        lines.push(fitWidth(`  ${renderedLine}`, width));
       }
     }
   }
