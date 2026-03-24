@@ -1,5 +1,6 @@
 import type { Component } from '../core/component';
-import { RESET, FG_CYAN, FG_GRAY, FG_RED, FG_YELLOW } from '../core/ansi';
+import { RESET } from '../core/ansi';
+import { theme } from '../core/theme';
 import { BRAILLE_FRAMES, FRAME_INTERVAL_MS } from '../components/spinner';
 import { measureWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
@@ -53,20 +54,20 @@ export class StatusBar implements Component {
     if (this.mode === 'streaming' || this.mode === 'thinking') {
       const frame = BRAILLE_FRAMES[this.frameIndex % BRAILLE_FRAMES.length];
       const label = this.status || 'Generating…';
-      left = `${FG_YELLOW}${frame}${RESET} ${label}`;
+      left = `${theme.statusStreamingFg}${frame}${RESET} ${label}`;
     } else if (this.mode === 'error') {
-      left = `${FG_RED}✗${RESET} ${this.status}`;
+      left = `${theme.statusErrorFg}✗${RESET} ${this.status}`;
     } else if (this.status) {
-      left = `${FG_GRAY}${this.status}${RESET}`;
+      left = `${theme.statusIdleFg}${this.status}${RESET}`;
     }
 
     // Right section
     let right = '';
     if (this.model) {
-      right = `${FG_CYAN}${this.model}${RESET}`;
+      right = `${theme.statusModelFg}${this.model}${RESET}`;
     }
     if (this.inputTokens > 0 || this.outputTokens > 0) {
-      right += ` ${FG_GRAY}↑${this.inputTokens} ↓${this.outputTokens}${RESET}`;
+      right += ` ${theme.statusTokensFg}↑${this.inputTokens} ↓${this.outputTokens}${RESET}`;
     }
 
     const leftWidth = measureWidth(stripAnsi(left));

@@ -1,5 +1,6 @@
 import type { Component } from '../core/component';
-import { RESET, BOLD, FG_CYAN, FG_GREEN, FG_GRAY, FG_RED, FG_YELLOW } from '../core/ansi';
+import { RESET, BOLD } from '../core/ansi';
+import { theme } from '../core/theme';
 import { BRAILLE_FRAMES, FRAME_INTERVAL_MS } from '../components/spinner';
 import { truncate } from '../utils/truncate';
 import type { ToolStatus } from './tool-call';
@@ -112,10 +113,10 @@ export class ToolActivityLog implements Component {
 
   private renderEntry(entry: ToolEntry, width: number): string {
     const statusIcon = this.statusIcon(entry.status);
-    const name = `${FG_CYAN}${BOLD}${entry.name}${RESET}`;
+    const name = `${theme.toolNameFg}${BOLD}${entry.name}${RESET}`;
     const maxLabelWidth = Math.max(0, width - entry.name.length - 6);
     const label = entry.label
-      ? ` ${FG_GRAY}${truncate(entry.label, maxLabelWidth)}${RESET}`
+      ? ` ${theme.toolLabelFg}${truncate(entry.label, maxLabelWidth)}${RESET}`
       : '';
     return `${statusIcon} ${name}${label}`;
   }
@@ -124,10 +125,10 @@ export class ToolActivityLog implements Component {
     switch (status) {
       case 'running': {
         const frame = BRAILLE_FRAMES[this.frameIndex % BRAILLE_FRAMES.length];
-        return `${FG_YELLOW}${frame}${RESET}`;
+        return `${theme.toolRunningFg}${frame}${RESET}`;
       }
-      case 'done':  return `${FG_GREEN}✓${RESET}`;
-      case 'error': return `${FG_RED}✗${RESET}`;
+      case 'done':  return `${theme.toolDoneFg}✓${RESET}`;
+      case 'error': return `${theme.toolErrorFg}✗${RESET}`;
     }
   }
 

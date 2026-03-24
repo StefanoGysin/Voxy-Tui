@@ -1,5 +1,6 @@
 import type { Component } from '../core/component';
-import { RESET, BOLD, DIM, FG_WHITE, FG_BLACK, bg } from '../core/ansi';
+import { RESET, BOLD, DIM, FG_WHITE, FG_BLACK } from '../core/ansi';
+import { theme } from '../core/theme';
 import { truncate } from '../utils/truncate';
 
 export type ToastType = 'info' | 'success' | 'warning' | 'error' | 'mode';
@@ -23,11 +24,11 @@ const DEFAULT_DURATION = 3000;
 const LEFT_PADDING = '  ';
 
 const TYPE_CONFIG: Record<ToastType, { bg: string; fg: string; icon: string }> = {
-  mode:    { bg: bg(6, 182, 212),   fg: `${FG_WHITE}${BOLD}`, icon: '⚡' },
-  success: { bg: bg(22, 163, 74),   fg: `${FG_WHITE}${BOLD}`, icon: '✓' },
-  warning: { bg: bg(202, 138, 4),   fg: `${FG_BLACK}${BOLD}`, icon: '⚠' },
-  error:   { bg: bg(220, 38, 38),   fg: `${FG_WHITE}${BOLD}`, icon: '✗' },
-  info:    { bg: bg(37, 99, 235),   fg: `${FG_WHITE}${BOLD}`, icon: 'ℹ' },
+  mode:    { bg: theme.toastModeBg,    fg: `${FG_WHITE}${BOLD}`, icon: '⚡' },
+  success: { bg: theme.toastSuccessBg, fg: `${FG_WHITE}${BOLD}`, icon: '✓' },
+  warning: { bg: theme.toastWarningBg, fg: `${FG_BLACK}${BOLD}`, icon: '⚠' },
+  error:   { bg: theme.toastErrorBg,   fg: `${FG_WHITE}${BOLD}`, icon: '✗' },
+  info:    { bg: theme.toastInfoBg,    fg: `${FG_WHITE}${BOLD}`, icon: 'ℹ' },
 };
 
 export class Toast implements Component {
