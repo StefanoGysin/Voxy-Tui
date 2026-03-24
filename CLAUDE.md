@@ -248,6 +248,9 @@ import { theme } from 'voxy-tui';
 // theme.scrollbarTrackFg — fg(58, 58, 58)    — cor da trilha
 // theme.scrollbarTrackBg — bg(28, 28, 28)    — fundo da trilha
 // theme.scrollbarSepFg   — fg(48, 48, 48)    — separador entre conteúdo e scrollbar
+// theme.toastModeBg, toastSuccessBg, toastWarningBg, toastErrorBg, toastInfoBg — backgrounds de toast
+// theme.statusStreamingFg, statusErrorFg, statusIdleFg, statusModelFg, statusTokensFg — cores do StatusBar
+// theme.toolNameFg, toolRunningFg, toolDoneFg, toolErrorFg, toolLabelFg — cores do ToolActivityLog
 // Anti-bleed pattern: padded.replaceAll(RESET, RESET + bg) — previne bleed de background quando ANSI RESET aparece mid-line
 ```
 
