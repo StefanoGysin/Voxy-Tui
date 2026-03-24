@@ -131,15 +131,15 @@ describe('MessageList — tool messages', () => {
   test('tool expandida mostra hint Ctrl+E recolher', () => {
     const output = Array.from({ length: 10 }, (_, i) => `line ${i}`);
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
-    list.toggleLastTruncatedTool(); // expand
+    list.toggleLastTool(); // expand
     const joined = stripAnsi(list.render(80, 30).join('\n'));
     expect(joined).toContain('Ctrl+E recolher');
   });
 
-  test('toggleLastTruncatedTool expande output', () => {
+  test('toggleLastTool expande output', () => {
     const output = ['a', 'b', 'c', 'd', 'e'];
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
-    const toggled = list.toggleLastTruncatedTool();
+    const toggled = list.toggleLastTool();
     expect(toggled).toBe(true);
     const joined = stripAnsi(list.render(80, 20).join('\n'));
     expect(joined).toContain('d');
@@ -147,27 +147,27 @@ describe('MessageList — tool messages', () => {
     expect(joined).not.toContain('linhas ocultas');
   });
 
-  test('toggleLastTruncatedTool recolhe após expand', () => {
+  test('toggleLastTool recolhe após expand', () => {
     const output = ['a', 'b', 'c', 'd', 'e'];
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
-    list.toggleLastTruncatedTool(); // expand
-    list.toggleLastTruncatedTool(); // collapse
+    list.toggleLastTool(); // expand
+    list.toggleLastTool(); // collapse
     const joined = stripAnsi(list.render(80, 20).join('\n'));
     // Collapsed: 1 linha, output não visível
     expect(joined).toContain('Ctrl+E expandir');
     expect(joined).not.toContain('Ctrl+E recolher');
   });
 
-  test('toggleLastTruncatedTool retorna true para qualquer tool', () => {
+  test('toggleLastTool retorna true para qualquer tool', () => {
     list.addToolMessage('1', 'Bash', 'cmd: date', ['single line'], 'done');
-    expect(list.toggleLastTruncatedTool()).toBe(true);
+    expect(list.toggleLastTool()).toBe(true);
   });
 
-  test('toggleLastTruncatedTool age na tool mais recente', () => {
+  test('toggleLastTool age na tool mais recente', () => {
     const output = ['a', 'b', 'c', 'd', 'e'];
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
     list.addToolMessage('2', 'Read', 'file: a.ts', output, 'done');
-    list.toggleLastTruncatedTool();
+    list.toggleLastTool();
     const msgs = (list as any).messages as ChatMessage[];
     expect(msgs[0].toolCollapsed).toBe(true);
     expect(msgs[1].toolCollapsed).toBe(false);

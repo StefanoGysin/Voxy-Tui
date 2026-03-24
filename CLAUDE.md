@@ -123,6 +123,15 @@ input.onChange?: (text: string) => void
 // isSidebarFocused(): boolean — retorna se sidebar tem foco
 // handleMouse(event: MouseClickEvent): boolean — delega click para sidebar ou messageList
 // handleDrag(event: MouseDragEvent): boolean — delega drag para sidebar
+//
+// Tool messages: collapsed por default em 1 linha (icon + name + summary + hint)
+// Ctrl+E ou click: toggle expand/collapse de tool messages
+// toggleLastTool(): boolean — togla expand/collapse da última tool message
+// generateToolSummary: summary inteligente por tipo (Read, Glob, Grep, Bash, Edit, Write)
+// toolRawInput: Record<string, unknown> — raw input preservado para summaries
+// buildAllLines(): método interno que constrói todas as linhas com separadores corretos
+// Separadores: box-drawing ─ (não ASCII -)
+// Cores por tool: Read/Glob/Grep=selectedFg, Edit/Write=successFg, Bash=warningFg
 ```
 
 ### StreamingThinkingIndicator
@@ -234,6 +243,11 @@ import { theme } from 'voxy-tui';
 // theme.textDim       — fg(72, 85, 106) — texto secundário
 // theme.hintsFg       — fg(58, 71, 89)  — hints e atalhos
 // theme.dangerFg, theme.dangerSelectedBg, theme.dangerSelectedFg — modo danger
+// theme.scrollbarThumbFg — fg(168, 168, 168) — cor do polegar do scrollbar
+// theme.scrollbarThumbBg — bg(88, 88, 88)    — fundo do polegar
+// theme.scrollbarTrackFg — fg(58, 58, 58)    — cor da trilha
+// theme.scrollbarTrackBg — bg(28, 28, 28)    — fundo da trilha
+// theme.scrollbarSepFg   — fg(48, 48, 48)    — separador entre conteúdo e scrollbar
 // Anti-bleed pattern: padded.replaceAll(RESET, RESET + bg) — previne bleed de background quando ANSI RESET aparece mid-line
 ```
 
@@ -279,6 +293,7 @@ padEndAnsi(line: string, targetWidth: number): string
 | **35B — ThinkingBlock Fixes** | `feat/session-35b-thinking-block-fixes` | ✅ merged | 356 |
 | **36 — Toast Notification** | `feat/session-36-toast` | ✅ merged | 32 |
 | **37 — PermissionDialogSlot** | `feat/permission-dialog-slot` | ✅ merged | — |
+| **38 — Tool Oneline** | `feat/tool-oneline` | 🔄 em progresso | 468 |
 
 ---
 
@@ -309,8 +324,8 @@ src/
 │   ├── stack.ts         — Stack vertical + horizontal
 │   └── index.ts
 ├── chat/
-│   ├── types.ts         — ChatMessage, MessageRole
-│   ├── message-list.ts  — lista scrollável com sticky bottom
+│   ├── types.ts         — ChatMessage (toolRawInput, toolCollapsed), MessageRole
+│   ├── message-list.ts  — lista scrollável com sticky bottom + tool oneline rendering
 │   ├── input-bar.ts     — TextInput + separador ─ + histórico ↑/↓
 │   ├── status-bar.ts    — spinner + model + tokens (1 linha)
 │   ├── chat-layout.ts   — compositor MessageList+InputBar+StatusBar

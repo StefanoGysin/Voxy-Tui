@@ -58,6 +58,8 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
   const output = msg.toolOutput ?? [];
   const rawName = msg.toolName ?? '';
   const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  // toolInput pode conter ANSI — sanitizar uma vez para usar como fallback
+  const inputFallback = stripAnsi(msg.toolInput ?? '');
 
   switch (name) {
     case 'Read': {
@@ -66,8 +68,8 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
       const lineCount = output.length;
       const summary = base
         ? `${base} · ${lineCount} linhas`
-        : (msg.toolInput ?? '');
-      return stripAnsi(fitWidth(summary, maxWidth));
+        : inputFallback;
+      return fitWidth(summary, maxWidth);
     }
 
     case 'Glob': {
@@ -76,7 +78,7 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
       const summary = pattern
         ? `${count} arquivos · ${pattern}`
         : `${count} arquivos`;
-      return stripAnsi(fitWidth(summary, maxWidth));
+      return fitWidth(summary, maxWidth);
     }
 
     case 'Grep': {
@@ -85,12 +87,12 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
       const summary = pattern
         ? `${count} matches · "${pattern}"`
         : `${count} matches`;
-      return stripAnsi(fitWidth(summary, maxWidth));
+      return fitWidth(summary, maxWidth);
     }
 
     case 'Bash': {
-      const command = (raw?.command as string) ?? msg.toolInput ?? '';
-      return stripAnsi(fitWidth(command, maxWidth));
+      const command = stripAnsi((raw?.command as string) ?? msg.toolInput ?? '');
+      return fitWidth(command, maxWidth);
     }
 
     case 'Edit': {
@@ -102,8 +104,8 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
       const newLines = newStr ? newStr.split('\n').length : 0;
       const summary = base
         ? `${base} · −${oldLines} +${newLines}`
-        : (msg.toolInput ?? '');
-      return stripAnsi(fitWidth(summary, maxWidth));
+        : inputFallback;
+      return fitWidth(summary, maxWidth);
     }
 
     case 'Write': {
@@ -116,13 +118,12 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
       const action = isUpdate ? 'Sobrescreveu' : 'Criou';
       const summary = base
         ? `${action} ${base} · ${lineCount} linhas`
-        : (msg.toolInput ?? '');
-      return stripAnsi(fitWidth(summary, maxWidth));
+        : inputFallback;
+      return fitWidth(summary, maxWidth);
     }
 
     default: {
-      const fallback = msg.toolInput ?? '';
-      return stripAnsi(fitWidth(fallback, maxWidth));
+      return fitWidth(inputFallback, maxWidth);
     }
   }
 }
@@ -192,9 +193,9 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
     const isEdit = name === 'Edit';
     const isWrite = name === 'Write';
 
-    // Write com "+ " prefix precisa de 4 chars de overhead (2 indent + 2 prefix)
+    // Edit/Write: linhas de diff têm prefixos (-/+/< /> ) de 2 chars + 2 indent = 4
     // Demais precisam de 2 chars (indent)
-    const maxLineWidth = isWrite
+    const maxLineWidth = (isEdit || isWrite)
       ? Math.max(1, width - 4)
       : Math.max(1, width - 2);
 
@@ -470,7 +471,7 @@ export class MessageList implements Component {
     }
   }
 
-  toggleLastTruncatedTool(): boolean {
+  toggleLastTool(): boolean {
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i].role === 'tool') {
         this.messages[i].toolCollapsed = !this.messages[i].toolCollapsed;
