@@ -25,6 +25,11 @@ export interface Theme {
   readonly diffCtxFg: string;
   readonly separatorFg: string;
   readonly hintsFg: string;
+  readonly scrollbarThumbFg: string;
+  readonly scrollbarThumbBg: string;
+  readonly scrollbarTrackFg: string;
+  readonly scrollbarTrackBg: string;
+  readonly scrollbarSepFg: string;
 }
 
 export const theme: Theme = {
@@ -77,6 +82,13 @@ export const theme: Theme = {
 
   // Footer/hints
   hintsFg: fg(61, 90, 110),
+
+  // Scrollbar
+  scrollbarThumbFg: fg(168, 168, 168),
+  scrollbarThumbBg: bg(88, 88, 88),
+  scrollbarTrackFg: fg(58, 58, 58),
+  scrollbarTrackBg: bg(28, 28, 28),
+  scrollbarSepFg: fg(48, 48, 48),
 };
 
 /** Caractere visual para borda de item selecionado (não é sequência ANSI). */

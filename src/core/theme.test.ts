@@ -16,6 +16,9 @@ describe('theme', () => {
     'diffAddFg', 'diffAddBg', 'diffDelFg', 'diffDelBg', 'diffCtxFg',
     'separatorFg',
     'hintsFg',
+    'scrollbarThumbFg', 'scrollbarThumbBg',
+    'scrollbarTrackFg', 'scrollbarTrackBg',
+    'scrollbarSepFg',
   ];
 
   it('exports all expected keys', () => {
