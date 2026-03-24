@@ -258,6 +258,17 @@ import { padEndAnsi } from 'voxy-tui';
 padEndAnsi(line: string, targetWidth: number): string
 ```
 
+### `fitWidth` (utilitário de largura exata)
+```typescript
+import { fitWidth } from 'voxy-tui';
+// Garante que a linha tenha EXATAMENTE targetWidth colunas visuais:
+// — Se visual < target: pad com espaços (como padEndAnsi)
+// — Se visual === target: retorna sem modificação
+// — Se visual > target: trunca preservando sequências ANSI (sem cortar mid-char)
+// Sanitiza tabs (\t → 2 espaços) antes de medir
+fitWidth(line: string, targetWidth: number): string
+```
+
 ---
 
 ## Limitações conhecidas
