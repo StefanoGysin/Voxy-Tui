@@ -45,6 +45,9 @@ export interface Theme {
   readonly statusModelFg: string;
   readonly statusTokensFg: string;
 
+  // ToolMessage
+  readonly toolMsgBg: string;
+
   // ToolActivityLog
   readonly toolNameFg: string;
   readonly toolRunningFg: string;
@@ -124,6 +127,9 @@ export const theme: Theme = {
   statusIdleFg: fg(139, 148, 158),
   statusModelFg: fg(34, 211, 238),
   statusTokensFg: fg(139, 148, 158),
+
+  // ToolMessage
+  toolMsgBg: bg(15, 20, 42),
 
   // ToolActivityLog
   toolNameFg: fg(34, 211, 238),
