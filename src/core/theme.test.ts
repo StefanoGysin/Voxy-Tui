@@ -21,7 +21,7 @@ describe('theme', () => {
     'scrollbarSepFg',
     'toastModeBg', 'toastSuccessBg', 'toastWarningBg', 'toastErrorBg', 'toastInfoBg',
     'statusStreamingFg', 'statusErrorFg', 'statusIdleFg', 'statusModelFg', 'statusTokensFg',
-    'toolMsgBg',
+    'toolMsgBg', 'userMsgBg', 'assistantMsgBg', 'userTextFg', 'userTextItalic',
     'toolNameFg', 'toolRunningFg', 'toolDoneFg', 'toolErrorFg', 'toolLabelFg',
   ];
 
@@ -37,8 +37,9 @@ describe('theme', () => {
     expect(actual).toEqual(expected);
   });
 
-  it('every value is a non-empty string', () => {
+  it('every value is a non-empty string or boolean', () => {
     for (const [key, value] of Object.entries(theme)) {
+      if (typeof value === 'boolean') continue;
       expect(typeof value).toBe('string');
       expect((value as string).length).toBeGreaterThan(0);
     }
@@ -47,6 +48,7 @@ describe('theme', () => {
   it('ANSI values contain escape sequences', () => {
     for (const key of expectedKeys) {
       const value = theme[key as keyof typeof theme];
+      if (typeof value === 'boolean') continue;
       expect(value).toContain('\x1b');
     }
   });

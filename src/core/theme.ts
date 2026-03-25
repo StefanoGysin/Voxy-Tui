@@ -45,8 +45,12 @@ export interface Theme {
   readonly statusModelFg: string;
   readonly statusTokensFg: string;
 
-  // ToolMessage
+  // Message backgrounds & text
   readonly toolMsgBg: string;
+  readonly userMsgBg: string;
+  readonly assistantMsgBg: string;
+  readonly userTextFg: string;
+  readonly userTextItalic: boolean;
 
   // ToolActivityLog
   readonly toolNameFg: string;
@@ -128,8 +132,12 @@ export const theme: Theme = {
   statusModelFg: fg(34, 211, 238),
   statusTokensFg: fg(139, 148, 158),
 
-  // ToolMessage
+  // Message backgrounds & text
   toolMsgBg: bg(15, 20, 42),
+  userMsgBg: bg(12, 16, 26),
+  assistantMsgBg: bg(12, 16, 26),
+  userTextFg: fg(34, 211, 238),
+  userTextItalic: true,
 
   // ToolActivityLog
   toolNameFg: fg(34, 211, 238),
