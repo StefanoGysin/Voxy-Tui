@@ -27,7 +27,7 @@ const SCROLLBAR_PAGE_LINES = 10;
 /** Retorna o caractere ANSI colorido de borda esquerda para a role dada. */
 function getMsgBorderAnsi(role: ChatMessage['role']): string {
   switch (role) {
-    case 'user':      return `${theme.successFg}│${RESET}`;
+    case 'user':      return `${theme.userTextFg}│${RESET}`;
     case 'assistant': return `${theme.selectedFg}│${RESET}`;
     case 'system':    return `${theme.textDim}│${RESET}`;
     case 'tool':      return `${theme.warningFg}│${RESET}`;
@@ -263,7 +263,7 @@ function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: Thinking
 
   switch (msg.role) {
     case 'user':
-      header = `${theme.successFg}${BOLD}⬥ You${RESET} ${time}`;
+      header = `${theme.userTextFg}${BOLD}⬥ You${RESET} ${time}`;
       break;
     case 'assistant':
       header = `${theme.selectedFg}${BOLD}✦ Assistant${RESET} ${time}`;
@@ -280,10 +280,17 @@ function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: Thinking
   const thinkingLines = thinkingBlock ? thinkingBlock.render(width, 10000) : [];
   const contentLines = msg.role === 'assistant'
     ? renderMarkdown(msg.content, width)
-    : wrapText(msg.content, width);
+    : wrapText(msg.content, width).map(line => `${theme.userTextFg}${theme.userTextItalic ? ITALIC : ''}${line}${RESET}`);
   const separator = `${theme.borderFg}${DIM}${'─'.repeat(width)}${RESET}`;
   const allLines = [header, ...thinkingLines, ...contentLines, separator];
-  return { lines: allLines, bgs: allLines.map(() => null) };
+  // Determinar background por role
+  let msgBg: string | null = null;
+  if (msg.role === 'user') {
+    msgBg = theme.userMsgBg;
+  } else if (msg.role === 'assistant') {
+    msgBg = theme.assistantMsgBg;
+  }
+  return { lines: allLines, bgs: allLines.map(() => msgBg) };
 }
 
 interface BuildResult {

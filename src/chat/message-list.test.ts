@@ -533,7 +533,7 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     expect((list as any).selAnchorX).toBe(1);
   });
 
-  test('left border: user tem borda verde (│), assistant tem borda ciano', () => {
+  test('left border: user tem borda ciano (│), assistant tem borda ciano', () => {
     const list = new MessageList();
     list.addMessage({ id: '1', role: 'user', content: 'oi', timestamp: new Date() });
     list.addMessage({ id: '2', role: 'assistant', content: 'olá', timestamp: new Date() });
@@ -541,9 +541,9 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
     // Toda linha de conteúdo deve ter │ como primeiro char após stripAnsi
     expect(contentLines.every(l => stripAnsi(l)[0] === '│')).toBe(true);
-    // Deve haver linhas com theme.successFg│ (user) e theme.selectedFg│ (assistant)
+    // Deve haver linhas com theme.userTextFg│ (user) e theme.selectedFg│ (assistant)
     const joined = lines.join('\n');
-    expect(joined).toContain(theme.successFg + '│');   // user border (green)
+    expect(joined).toContain(theme.userTextFg + '│');   // user border (cyan)
     expect(joined).toContain(theme.selectedFg + '│');   // assistant border (cyan)
   });
 
