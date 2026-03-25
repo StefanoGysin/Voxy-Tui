@@ -128,7 +128,7 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
   }
 }
 
-function renderToolMessage(msg: ChatMessage, width: number): string[] {
+function renderToolMessage(msg: ChatMessage, width: number): { lines: string[], bgs: string[] } {
   const rawName = msg.toolName ?? 'Tool';
   const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   const output = msg.toolOutput ?? [];
@@ -154,7 +154,10 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
     const summaryMaxWidth = Math.max(1, width - 2 - nameWidth - 2 - hintText.length - 1);
     const summary = generateToolSummary(msg, summaryMaxWidth);
     const leftPart = `${icon} ${nameAnsi}  ${theme.textDim}${summary}${RESET}`;
-    return [padEndAnsi(leftPart, width - hintText.length) + hintAnsi];
+    return {
+      lines: [padEndAnsi(leftPart, width - hintText.length) + hintAnsi],
+      bgs: [theme.toolMsgBg],
+    };
   }
 
   // Expanded view
@@ -167,6 +170,7 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
   const header = padEndAnsi(headerLeft, width - hintText.length) + hintAnsi;
 
   const lines: string[] = [header];
+  const bgs: string[] = [theme.toolMsgBg];
 
   // Input details
   const raw = msg.toolRawInput;
@@ -179,14 +183,17 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
       const maxValWidth = Math.max(1, width - key.length - 4); // "  key: "
       const truncated = stripAnsi(fitWidth(cleanVal.split('\n')[0], maxValWidth));
       lines.push(fitWidth(`  ${theme.textDim}${key}: ${truncated}${RESET}`, width));
+      bgs.push(theme.toolMsgBg);
     }
   } else if (msg.toolInput) {
     const cleanInput = (msg.toolInput ?? '').replace(/\t/g, '  ');
     lines.push(fitWidth(`  ${theme.textDim}${cleanInput}${RESET}`, width));
+    bgs.push(theme.toolMsgBg);
   }
 
   // Separador fino entre input e output
   lines.push(`  ${theme.borderFg}${'─'.repeat(Math.max(0, width - 2))}${RESET}`);
+  bgs.push(theme.toolMsgBg);
 
   // Output completo
   if (output.length > 0) {
@@ -212,13 +219,18 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
           renderedLine = `${theme.textDim}↳${RESET} ${wrapped[wi]}`;
         }
 
+        // Background padrão para output — pode ser sobrescrito abaixo
+        let lineBg = theme.toolMsgBg;
+
         // Colorir linhas de diff para Edit
         if (isEdit) {
           const stripped = stripAnsi(renderedLine);
           if (stripped.startsWith('-') || stripped.startsWith('< ')) {
             renderedLine = `${theme.diffDelFg}${stripped}${RESET}`;
+            lineBg = theme.diffDelBg;
           } else if (stripped.startsWith('+') || stripped.startsWith('> ')) {
             renderedLine = `${theme.diffAddFg}${stripped}${RESET}`;
+            lineBg = theme.diffAddBg;
           }
         }
 
@@ -230,20 +242,22 @@ function renderToolMessage(msg: ChatMessage, width: number): string[] {
           const isCatNLine = /^\s*\d+\s/.test(stripped);
           if (isCatNLine) {
             renderedLine = `${theme.diffAddFg}+ ${stripped}${RESET}`;
+            lineBg = theme.diffAddBg;
           }
         }
 
         // Indentação de 2 espaços + fitWidth para garantir largura exata
         lines.push(fitWidth(`  ${renderedLine}`, width));
+        bgs.push(lineBg);
       }
     }
   }
 
   // SEM separador trailing — gerenciado por buildAllLines
-  return lines;
+  return { lines, bgs };
 }
 
-function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: ThinkingBlock): string[] {
+function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: ThinkingBlock): { lines: string[], bgs: (string | null)[] } {
   let header: string;
   const time = `${theme.textDim}${DIM}${formatTime(msg.timestamp)}${RESET}`;
 
@@ -257,8 +271,10 @@ function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: Thinking
     case 'system':
       header = `${theme.textDim}${ITALIC}▸ System${RESET} ${time}`;
       break;
-    case 'tool':
-      return renderToolMessage(msg, width);
+    case 'tool': {
+      const toolResult = renderToolMessage(msg, width);
+      return { lines: toolResult.lines, bgs: toolResult.bgs };
+    }
   }
 
   const thinkingLines = thinkingBlock ? thinkingBlock.render(width, 10000) : [];
@@ -266,7 +282,8 @@ function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: Thinking
     ? renderMarkdown(msg.content, width)
     : wrapText(msg.content, width);
   const separator = `${theme.borderFg}${DIM}${'─'.repeat(width)}${RESET}`;
-  return [header, ...thinkingLines, ...contentLines, separator];
+  const allLines = [header, ...thinkingLines, ...contentLines, separator];
+  return { lines: allLines, bgs: allLines.map(() => null) };
 }
 
 interface BuildResult {
@@ -275,6 +292,7 @@ interface BuildResult {
   thinkingMap: Map<number, ThinkingBlock>;
   msgMap: (ChatMessage | null)[];
   msgStartMap: Map<ChatMessage, number>;
+  lineBgs: (string | null)[];
 }
 
 export class MessageList implements Component {
@@ -313,7 +331,7 @@ export class MessageList implements Component {
   onTextCopied?: (text: string) => void;
 
   /** Renderiza uma mensagem, passando o ThinkingBlock associado (se houver). */
-  private renderMsg(msg: ChatMessage, width: number): string[] {
+  private renderMsg(msg: ChatMessage, width: number): { lines: string[], bgs: (string | null)[] } {
     let block: ThinkingBlock | undefined;
     if (msg.thinkingContent) {
       block = this.thinkingBlocks.get(msg);
@@ -338,6 +356,7 @@ export class MessageList implements Component {
     const thinkingMap = new Map<number, ThinkingBlock>();
     const msgMap: (ChatMessage | null)[] = [];
     const msgStartMap = new Map<ChatMessage, number>();
+    const lineBgs: (string | null)[] = [];
 
     let prevWasTool = false;
 
@@ -350,11 +369,12 @@ export class MessageList implements Component {
         lines.push(sep);
         borders.push(getMsgBorderAnsi('tool'));
         msgMap.push(null);
+        lineBgs.push(null);
       }
 
       msgStartMap.set(msg, lines.length);
       const lineStart = lines.length;
-      const msgLines = this.renderMsg(msg, textWidth);
+      const msgResult = this.renderMsg(msg, textWidth);
 
       // Construir thinkingMap para mensagens assistant com thinking
       if (msg.thinkingContent) {
@@ -369,16 +389,17 @@ export class MessageList implements Component {
       }
 
       const borderChar = getMsgBorderAnsi(msg.role);
-      for (const line of msgLines) {
-        lines.push(line);
+      for (let li = 0; li < msgResult.lines.length; li++) {
+        lines.push(msgResult.lines[li]);
         borders.push(borderChar);
         msgMap.push(msg);
+        lineBgs.push(msgResult.bgs[li] ?? null);
       }
 
       prevWasTool = isTool;
     }
 
-    return { lines, borders, thinkingMap, msgMap, msgStartMap };
+    return { lines, borders, thinkingMap, msgMap, msgStartMap, lineBgs };
   }
 
   /**
@@ -739,11 +760,11 @@ export class MessageList implements Component {
     if (msg.role !== 'tool') return false
 
     const wasCollapsed = msg.toolCollapsed !== false
-    const oldLen = this.renderMsg(msg, textWidth).length
+    const oldLen = this.renderMsg(msg, textWidth).lines.length
 
     msg.toolCollapsed = !msg.toolCollapsed
 
-    const newLen = this.renderMsg(msg, textWidth).length
+    const newLen = this.renderMsg(msg, textWidth).lines.length
     const lineDelta = newLen - oldLen
     const totalAfter = msgMap.length + lineDelta
     const msgStart = msgStartMap.get(msg) ?? 0
@@ -846,7 +867,7 @@ export class MessageList implements Component {
     const textWidth = width - 2 - MARGIN_LEFT  // margem + 1 gap + 1 scrollbar
 
     // Renderizar todas as mensagens via buildAllLines
-    const { lines: allLines, borders: allLineBorders, thinkingMap } = this.buildAllLines(textWidth);
+    const { lines: allLines, borders: allLineBorders, thinkingMap, lineBgs: allLineBgs } = this.buildAllLines(textWidth);
     this.thinkingLineMap = thinkingMap;
     // Cachear count para uso em updateSelOnScroll() (scroll durante drag)
     this.lastAllLinesCount = allLines.length;
@@ -882,7 +903,12 @@ export class MessageList implements Component {
         ...allLines.map((l, i) => {
           const hl = this.applySelHL(l, i, selFromIdx, selFromX, selToIdx, selToX)
           const border = allLineBorders[i] ?? ' '
-          return padEndAnsi(border + ' ' + hl, width)
+          const composed = fitWidth(border + ' ' + hl, width)
+          const bgColor = allLineBgs[i];
+          if (bgColor) {
+            return `${bgColor}${composed.replaceAll(RESET, RESET + bgColor)}${RESET}`;
+          }
+          return composed
         }),
       ];
     }
@@ -903,14 +929,19 @@ export class MessageList implements Component {
       const prefixWidth = measureWidth(prefix);
       const dashCount = Math.max(0, textWidth - prefixWidth - 1);
       const hintLine = `${theme.textDim}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
-      const hintRow = SCROLLBAR_HINT_BORDER + ' ' + padEndAnsi(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
+      const hintRow = SCROLLBAR_HINT_BORDER + ' ' + fitWidth(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
 
       const contentSlice = allLines.slice(start, start + height - 1);
       const contentRows = contentSlice.map((line, i) => {
         const allLineIdx = start + i;
         const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
         const border = allLineBorders[allLineIdx] ?? ' ';
-        return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i + 1];
+        const composed = border + ' ' + fitWidth(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i + 1];
+        const bgColor = allLineBgs[allLineIdx];
+        if (bgColor) {
+          return `${bgColor}${composed.replaceAll(RESET, RESET + bgColor)}${RESET}`;
+        }
+        return composed;
       });
 
       return [hintRow, ...contentRows];
@@ -921,7 +952,12 @@ export class MessageList implements Component {
       const allLineIdx = start + i;
       const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
       const border = allLineBorders[allLineIdx] ?? ' ';
-      return border + ' ' + padEndAnsi(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i];
+      const composed = border + ' ' + fitWidth(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i];
+      const bgColor = allLineBgs[allLineIdx];
+      if (bgColor) {
+        return `${bgColor}${composed.replaceAll(RESET, RESET + bgColor)}${RESET}`;
+      }
+      return composed;
     });
   }
 }
