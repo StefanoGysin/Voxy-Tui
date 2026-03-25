@@ -5,6 +5,7 @@ import { RESET, BOLD, ITALIC, DIM, UNDERLINE,
          FG_BLUE, FG_CYAN, FG_GREEN, FG_YELLOW, FG_GRAY,
          STRIKETHROUGH } from '../core/ansi';
 import { wrapText } from '../utils/wrap';
+import { fitWidth } from '../utils/width';
 import { highlightCode } from './code-block';
 
 /**
@@ -64,7 +65,7 @@ export class Markdown implements Component {
                     : FG_GREEN;
         const prefix = '#'.repeat(t.depth) + ' ';
         const text = this.renderInline(t.tokens ?? []);
-        return [`${color}${prefix}${text}${RESET}`, ''];
+        return [fitWidth(`${color}${prefix}${text}${RESET}`, width), ''];
       }
 
       case 'paragraph': {
@@ -77,13 +78,13 @@ export class Markdown implements Component {
         const t = token as Tokens.Code;
         const lines: string[] = [];
         if (t.lang) {
-          lines.push(`${FG_GRAY}── ${t.lang} ──${RESET}`);
+          lines.push(fitWidth(`${FG_GRAY}── ${t.lang} ──${RESET}`, width));
         }
         const highlighted = highlightCode(t.text, t.lang ?? '');
         for (const raw of highlighted.split('\n')) {
           // Sanitizar tabs — code blocks frequentemente usam tab indentation
           const line = raw.includes('\t') ? raw.replace(/\t/g, '  ') : raw;
-          lines.push(`  ${line}`);
+          lines.push(fitWidth(`  ${line}`, width));
         }
         lines.push('');
         return lines;
