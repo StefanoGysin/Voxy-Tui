@@ -129,7 +129,10 @@ input.onChange?: (text: string) => void
 // toggleLastTool(): boolean — togla expand/collapse da última tool message
 // generateToolSummary: summary inteligente por tipo (Read, Glob, Grep, Bash, Edit, Write)
 // toolRawInput: Record<string, unknown> — raw input preservado para summaries
-// buildAllLines(): método interno que constrói todas as linhas com separadores corretos
+// buildAllLines(): método interno que constrói todas as linhas com separadores corretos + lineBgs[]
+// lineBgs: (string | null)[] — background ANSI por linha (toolMsgBg, diffAddBg, diffDelBg, ou null)
+// renderToolMessage retorna { lines: string[], bgs: string[] } — bgs contém o bg de cada linha
+// Composição no render() aplica anti-bleed pattern quando lineBgs[i] !== null
 // Separadores: box-drawing ─ (não ASCII -)
 // Cores por tool: Read/Glob/Grep=selectedFg, Edit/Write=successFg, Bash=warningFg
 ```
@@ -250,6 +253,11 @@ import { theme } from 'voxy-tui';
 // theme.scrollbarSepFg   — fg(48, 48, 48)    — separador entre conteúdo e scrollbar
 // theme.toastModeBg, toastSuccessBg, toastWarningBg, toastErrorBg, toastInfoBg — backgrounds de toast
 // theme.statusStreamingFg, statusErrorFg, statusIdleFg, statusModelFg, statusTokensFg — cores do StatusBar
+// theme.toolMsgBg — bg(15, 20, 42) — fundo azul royal para tool messages (anti-bleed aplicado na composição)
+// theme.userMsgBg — bg(12, 16, 26) — fundo para user messages (= panelBg, token separado para customização)
+// theme.assistantMsgBg — bg(12, 16, 26) — fundo para assistant messages (= panelBg, token separado para customização)
+// theme.userTextStyle — ITALIC — estilo ANSI aplicado ao texto do user
+// theme.userTextFg — fg(34, 211, 238) — cor cyan do texto e borda do user
 // theme.toolNameFg, toolRunningFg, toolDoneFg, toolErrorFg, toolLabelFg — cores do ToolActivityLog
 // Anti-bleed pattern: padded.replaceAll(RESET, RESET + bg) — previne bleed de background quando ANSI RESET aparece mid-line
 ```

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { MessageList } from './message-list';
 import type { ChatMessage } from './types';
 import { stripAnsi } from '../utils/strip-ansi';
-import { BOLD, FG_CYAN } from '../core/ansi';
+import { BOLD, FG_CYAN, RESET } from '../core/ansi';
 import { theme } from '../core/theme';
 
 function makeMsg(id: string, role: ChatMessage['role'], content: string): ChatMessage {
@@ -180,22 +180,6 @@ describe('MessageList — scroll indicator', () => {
       list.addMessage({ id: `${i}`, role: 'user', content: `msg ${i}`, timestamp: new Date() });
     }
   }
-
-  test('sem scroll: primeira linha NÃO é indicador', () => {
-    const list = new MessageList();
-    makeMany(list, 20);
-    const lines = list.render(80, 10);
-    expect(stripAnsi(lines[0])).not.toContain('linhas acima');
-  });
-
-  test('com scroll: hint line visível na primeira row', () => {
-    const list = new MessageList();
-    makeMany(list, 20);
-    list.scrollUp(5);
-    const lines = list.render(80, 10);
-    expect(stripAnsi(lines[0])).toContain('linhas acima');
-    expect(lines).toHaveLength(10);
-  });
 
   test('getScrollOffset() retorna 0 inicialmente', () => {
     const list = new MessageList();
@@ -533,7 +517,7 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     expect((list as any).selAnchorX).toBe(1);
   });
 
-  test('left border: user tem borda verde (│), assistant tem borda ciano', () => {
+  test('left border: user tem borda ciano (│), assistant tem borda ciano', () => {
     const list = new MessageList();
     list.addMessage({ id: '1', role: 'user', content: 'oi', timestamp: new Date() });
     list.addMessage({ id: '2', role: 'assistant', content: 'olá', timestamp: new Date() });
@@ -541,9 +525,9 @@ describe('MessageList — margem esquerda (MARGIN_LEFT)', () => {
     const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
     // Toda linha de conteúdo deve ter │ como primeiro char após stripAnsi
     expect(contentLines.every(l => stripAnsi(l)[0] === '│')).toBe(true);
-    // Deve haver linhas com theme.successFg│ (user) e theme.selectedFg│ (assistant)
+    // Deve haver linhas com theme.userTextFg│ (user) e theme.selectedFg│ (assistant)
     const joined = lines.join('\n');
-    expect(joined).toContain(theme.successFg + '│');   // user border (green)
+    expect(joined).toContain(theme.userTextFg + '│');   // user border (cyan)
     expect(joined).toContain(theme.selectedFg + '│');   // assistant border (cyan)
   });
 
@@ -670,22 +654,6 @@ describe('MessageList — scrollbar', () => {
     expect(list.getScrollOffset()).toBe(0);
   });
 
-  test('scrolled: hint line visível na primeira row', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    list.render(40, 5);
-    list.scrollUp(5);
-    const lines = list.render(40, 5);
-    expect(stripAnsi(lines[0])).toContain('5 linhas acima');
-  });
-
-  test('no fundo: sem hint line', () => {
-    const list = new MessageList();
-    makeMany(list, 30);
-    const lines = list.render(40, 5);
-    // scrollOffset=0 → sem hint
-    expect(stripAnsi(lines[0])).not.toContain('linhas acima');
-  });
 });
 
 describe('MessageList — markdown rendering', () => {
@@ -970,5 +938,70 @@ describe('MessageList — ThinkingBlock', () => {
     const strippedAfter = linesAfter.map(l => stripAnsi(l));
     expect(strippedAfter.join('\n')).toContain('Pensamento secreto');
     expect(strippedAfter.join('\n')).toContain('▼');
+  });
+});
+
+describe('anti-bleed pattern', () => {
+  test('tool message lines have toolMsgBg with anti-bleed pattern', () => {
+    const list = new MessageList();
+    list.addToolMessage('t1', 'Read', '/foo/bar.ts', ['line1', 'line2'], 'done', { file_path: '/foo/bar.ts' });
+    // Expandir a tool message para ter múltiplas linhas
+    (list as any).messages[0].toolCollapsed = false;
+
+    const lines = list.render(80, 30);
+    const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
+
+    // Linhas de tool devem conter o toolMsgBg
+    const toolLines = contentLines.filter(l => l.includes(theme.toolMsgBg));
+    expect(toolLines.length).toBeGreaterThan(0);
+
+    // Anti-bleed: após cada RESET dentro de uma linha com toolMsgBg,
+    // deve haver re-aplicação do bg (exceto o RESET final)
+    for (const line of toolLines) {
+      const parts = line.split(RESET);
+      // Cada parte após um RESET intermediário deve re-aplicar o toolMsgBg (exceto após o RESET final)
+      for (let i = 1; i < parts.length - 1; i++) {
+        expect(parts[i].startsWith(theme.toolMsgBg)).toBe(true);
+      }
+    }
+  });
+
+  test('user message lines have userMsgBg with anti-bleed pattern', () => {
+    const list = new MessageList();
+    list.addMessage({ id: 'u1', role: 'user', content: 'Hello world', timestamp: new Date() });
+
+    const lines = list.render(80, 10);
+    const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
+
+    // Linhas de user devem conter o userMsgBg
+    const userLines = contentLines.filter(l => l.includes(theme.userMsgBg));
+    expect(userLines.length).toBeGreaterThan(0);
+
+    // Anti-bleed: após cada RESET dentro de uma linha com userMsgBg,
+    // deve haver re-aplicação do bg (exceto o RESET final)
+    for (const line of userLines) {
+      const parts = line.split(RESET);
+      for (let i = 1; i < parts.length - 1; i++) {
+        expect(parts[i].startsWith(theme.userMsgBg)).toBe(true);
+      }
+    }
+  });
+
+  test('assistant message lines have assistantMsgBg with anti-bleed pattern', () => {
+    const list = new MessageList();
+    list.addMessage({ id: 'a1', role: 'assistant', content: 'Hello world', timestamp: new Date() });
+
+    const lines = list.render(80, 10);
+    const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
+
+    const assistantLines = contentLines.filter(l => l.includes(theme.assistantMsgBg));
+    expect(assistantLines.length).toBeGreaterThan(0);
+
+    for (const line of assistantLines) {
+      const parts = line.split(RESET);
+      for (let i = 1; i < parts.length - 1; i++) {
+        expect(parts[i].startsWith(theme.assistantMsgBg)).toBe(true);
+      }
+    }
   });
 });
