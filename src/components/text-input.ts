@@ -29,10 +29,13 @@ export class TextInput implements Component {
   private undoStack: CursorSnapshot[] = [];
   private killRing: string[] = [];
   private focused = false;
+  private cursorVisible = true;
+  private blinkTimer?: ReturnType<typeof setInterval>;
   private readonly options: Required<TextInputOptions>;
 
   onSubmit?: (text: string) => void;
   onChange?: (text: string) => void;
+  onUpdate?: () => void;
 
   constructor(options: TextInputOptions = {}) {
     this.options = {
@@ -66,8 +69,17 @@ export class TextInput implements Component {
 
   // ── Focus ─────────────────────────────────────────────────────────────────
 
-  onFocus(): void { this.focused = true; }
-  onBlur(): void { this.focused = false; }
+  onFocus(): void {
+    this.focused = true;
+    this.cursorVisible = true;
+    this.startBlink();
+  }
+
+  onBlur(): void {
+    this.focused = false;
+    this.cursorVisible = true;
+    this.stopBlink();
+  }
   minHeight(): number { return this.lines.length; }
 
   // ── Undo ──────────────────────────────────────────────────────────────────
@@ -87,6 +99,27 @@ export class TextInput implements Component {
     this.lines = snap.lines;
     this.cursorRow = snap.row;
     this.cursorCol = snap.col;
+  }
+
+  // ── Blink ───────────────────────────────────────────────────────────────
+
+  private startBlink(): void {
+    this.stopBlink();
+    this.blinkTimer = setInterval(() => {
+      this.cursorVisible = !this.cursorVisible;
+      this.onUpdate?.();
+    }, 530);
+  }
+
+  private stopBlink(): void {
+    if (this.blinkTimer !== undefined) {
+      clearInterval(this.blinkTimer);
+      this.blinkTimer = undefined;
+    }
+  }
+
+  dispose(): void {
+    this.stopBlink();
   }
 
   // ── Edição ────────────────────────────────────────────────────────────────
@@ -216,6 +249,12 @@ export class TextInput implements Component {
   // ── handleKey ─────────────────────────────────────────────────────────────
 
   handleKey(event: KeyEvent): boolean {
+    // Reset blink: cursor fica visível ao digitar
+    if (this.focused) {
+      this.cursorVisible = true;
+      this.startBlink();
+    }
+
     const { key, ctrl, shift } = event;
 
     // Submit: Enter (sem shift, sem ctrl)
@@ -311,8 +350,11 @@ export class TextInput implements Component {
     const before = line.slice(0, this.cursorCol);
     const cursorChar = line[this.cursorCol] ?? ' ';
     const after = line.slice(this.cursorCol + 1);
-    // Cursor: caractere invertido (bright + underline)
-    const cursor = `${BOLD}\x1b[7m${cursorChar}${RESET}`;
-    return before + cursor + after;
+
+    if (this.cursorVisible) {
+      const cursor = `${BOLD}\x1b[7m${cursorChar}${RESET}`;
+      return before + cursor + after;
+    }
+    return before + cursorChar + after;
   }
 }
