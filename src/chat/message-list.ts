@@ -280,7 +280,7 @@ function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: Thinking
   const thinkingLines = thinkingBlock ? thinkingBlock.render(width, 10000) : [];
   const contentLines = msg.role === 'assistant'
     ? renderMarkdown(msg.content, width)
-    : wrapText(msg.content, width).map(line => `${theme.userTextFg}${theme.userTextItalic ? ITALIC : ''}${line}${RESET}`);
+    : wrapText(msg.content, width).map(line => `${theme.userTextFg}${theme.userTextStyle}${line}${RESET}`);
   const separator = `${theme.borderFg}${DIM}${'─'.repeat(width)}${RESET}`;
   const allLines = [header, ...thinkingLines, ...contentLines, separator];
   // Determinar background por role

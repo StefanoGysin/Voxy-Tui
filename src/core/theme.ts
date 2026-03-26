@@ -1,4 +1,4 @@
-import { bg, fg } from './ansi';
+import { bg, fg, ITALIC } from './ansi';
 
 export interface Theme {
   readonly panelBg: string;
@@ -50,7 +50,7 @@ export interface Theme {
   readonly userMsgBg: string;
   readonly assistantMsgBg: string;
   readonly userTextFg: string;
-  readonly userTextItalic: boolean;
+  readonly userTextStyle: string;
 
   // ToolActivityLog
   readonly toolNameFg: string;
@@ -137,7 +137,7 @@ export const theme: Theme = {
   userMsgBg: bg(12, 16, 26),
   assistantMsgBg: bg(12, 16, 26),
   userTextFg: fg(34, 211, 238),
-  userTextItalic: true,
+  userTextStyle: ITALIC,
 
   // ToolActivityLog
   toolNameFg: fg(34, 211, 238),
