@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { MessageList } from './message-list';
 import type { ChatMessage } from './types';
 import { stripAnsi } from '../utils/strip-ansi';
-import { BOLD, FG_CYAN } from '../core/ansi';
+import { BOLD, FG_CYAN, RESET } from '../core/ansi';
 import { theme } from '../core/theme';
 
 function makeMsg(id: string, role: ChatMessage['role'], content: string): ChatMessage {
@@ -970,5 +970,31 @@ describe('MessageList — ThinkingBlock', () => {
     const strippedAfter = linesAfter.map(l => stripAnsi(l));
     expect(strippedAfter.join('\n')).toContain('Pensamento secreto');
     expect(strippedAfter.join('\n')).toContain('▼');
+  });
+});
+
+describe('anti-bleed pattern', () => {
+  test('tool message lines have toolMsgBg with anti-bleed pattern', () => {
+    const list = new MessageList();
+    list.addToolMessage('t1', 'Read', '/foo/bar.ts', ['line1', 'line2'], 'done', { file_path: '/foo/bar.ts' });
+    // Expandir a tool message para ter múltiplas linhas
+    (list as any).messages[0].toolCollapsed = false;
+
+    const lines = list.render(80, 30);
+    const contentLines = lines.filter(l => stripAnsi(l).trim() !== '');
+
+    // Linhas de tool devem conter o toolMsgBg
+    const toolLines = contentLines.filter(l => l.includes(theme.toolMsgBg));
+    expect(toolLines.length).toBeGreaterThan(0);
+
+    // Anti-bleed: após cada RESET dentro de uma linha com toolMsgBg,
+    // deve haver re-aplicação do bg (exceto o RESET final)
+    for (const line of toolLines) {
+      const parts = line.split(RESET);
+      // Todas as partes intermediárias (não a última) devem começar com toolMsgBg
+      for (let i = 1; i < parts.length - 1; i++) {
+        expect(parts[i].startsWith(theme.toolMsgBg)).toBe(true);
+      }
+    }
   });
 });
