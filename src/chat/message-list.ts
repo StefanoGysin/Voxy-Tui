@@ -45,6 +45,12 @@ function getToolNameColor(name: string): string {
   }
 }
 
+/** Aplica background ANSI com anti-bleed: re-insere bg após cada RESET. */
+function applyLineBg(line: string, bg: string | null): string {
+  if (!bg) return line;
+  return `${bg}${line.replaceAll(RESET, RESET + bg)}${RESET}`;
+}
+
 /** Extrai basename de um caminho de arquivo. */
 function basename(filePath: string): string {
   // Suportar tanto / quanto \ como separador
@@ -911,11 +917,7 @@ export class MessageList implements Component {
           const hl = this.applySelHL(l, i, selFromIdx, selFromX, selToIdx, selToX)
           const border = allLineBorders[i] ?? ' '
           const composed = fitWidth(border + ' ' + hl, width)
-          const bgColor = allLineBgs[i];
-          if (bgColor) {
-            return `${bgColor}${composed.replaceAll(RESET, RESET + bgColor)}${RESET}`;
-          }
-          return composed
+          return applyLineBg(composed, allLineBgs[i])
         }),
       ];
     }
@@ -944,11 +946,7 @@ export class MessageList implements Component {
         const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
         const border = allLineBorders[allLineIdx] ?? ' ';
         const composed = border + ' ' + fitWidth(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i + 1];
-        const bgColor = allLineBgs[allLineIdx];
-        if (bgColor) {
-          return `${bgColor}${composed.replaceAll(RESET, RESET + bgColor)}${RESET}`;
-        }
-        return composed;
+        return applyLineBg(composed, allLineBgs[allLineIdx]);
       });
 
       return [hintRow, ...contentRows];
@@ -960,11 +958,7 @@ export class MessageList implements Component {
       const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
       const border = allLineBorders[allLineIdx] ?? ' ';
       const composed = border + ' ' + fitWidth(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i];
-      const bgColor = allLineBgs[allLineIdx];
-      if (bgColor) {
-        return `${bgColor}${composed.replaceAll(RESET, RESET + bgColor)}${RESET}`;
-      }
-      return composed;
+      return applyLineBg(composed, allLineBgs[allLineIdx]);
     });
   }
 }
