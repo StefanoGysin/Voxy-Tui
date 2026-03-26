@@ -59,6 +59,17 @@ export function isBracketedPasteStart(raw: string): boolean {
 }
 
 /**
+ * Detecta focus events do terminal (mode 1004).
+ * \x1b[I = focus-in, \x1b[O = focus-out.
+ * Retorna null para qualquer outra sequência.
+ */
+export function parseFocusEvent(seq: string): 'focus-in' | 'focus-out' | null {
+  if (seq === '\x1b[I') return 'focus-in';
+  if (seq === '\x1b[O') return 'focus-out';
+  return null;
+}
+
+/**
  * Detecta eventos de scroll do mouse no formato SGR (mode 1006).
  * Formato: \x1b[<btn;x;yM (press) ou \x1b[<btn;x;ym (release)
  * btn=64 → scroll up, btn=65 → scroll down.
