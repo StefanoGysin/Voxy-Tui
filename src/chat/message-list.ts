@@ -295,7 +295,7 @@ function renderMessage(msg: ChatMessage, width: number, thinkingBlock?: Thinking
   } else if (msg.role === 'assistant') {
     msgBg = theme.assistantMsgBg;
   }
-  return { lines: allLines, bgs: allLines.map(() => msgBg) };
+  return { lines: allLines, bgs: allLines.map((_, i) => i === allLines.length - 1 ? null : msgBg) };
 }
 
 interface BuildResult {
