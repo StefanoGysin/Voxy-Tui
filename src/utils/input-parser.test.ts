@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseKey, parseMouseScroll, parseMouseClick, parseMouseDrag } from './input-parser';
+import { parseKey, parseMouseScroll, parseMouseClick, parseMouseDrag, parseFocusEvent } from './input-parser';
 
 describe('parseKey', () => {
   test('converte tecla simples', () => {
@@ -119,5 +119,23 @@ describe('parseMouseDrag', () => {
 
   test('scroll (btn=64) → null', () => {
     expect(parseMouseDrag('\x1b[<64;5;3M')).toBeNull();
+  });
+});
+
+describe('parseFocusEvent', () => {
+  test('\\x1b[I retorna focus-in', () => {
+    expect(parseFocusEvent('\x1b[I')).toBe('focus-in');
+  });
+
+  test('\\x1b[O retorna focus-out', () => {
+    expect(parseFocusEvent('\x1b[O')).toBe('focus-out');
+  });
+
+  test('\\x1b[A retorna null', () => {
+    expect(parseFocusEvent('\x1b[A')).toBeNull();
+  });
+
+  test('string normal retorna null', () => {
+    expect(parseFocusEvent('abc')).toBeNull();
   });
 });

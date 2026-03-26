@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach, jest } from 'bun:test';
 import { TextInput } from './text-input';
 import type { KeyEvent } from '../core/component';
 
@@ -84,5 +84,62 @@ describe('TextInput', () => {
     t.setValue('linha1\nlinha2\nlinha3');
     expect(t.getValue()).toBe('linha1\nlinha2\nlinha3');
     expect(t.render(80, 10).length).toBe(3);
+  });
+});
+
+describe('TextInput — cursor blink', () => {
+  let input: TextInput;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    input = new TextInput();
+  });
+
+  afterEach(() => {
+    input.dispose();
+    jest.useRealTimers();
+  });
+
+  test('onFocus inicia blink timer', () => {
+    let updateCount = 0;
+    input.onUpdate = () => { updateCount++; };
+    input.onFocus();
+    jest.advanceTimersByTime(530);
+    expect(updateCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('onBlur para blink e reseta cursorVisible', () => {
+    let updateCount = 0;
+    input.onUpdate = () => { updateCount++; };
+    input.onFocus();
+    jest.advanceTimersByTime(530);
+    const countAfterBlink = updateCount;
+    input.onBlur();
+    jest.advanceTimersByTime(530);
+    expect(updateCount).toBe(countAfterBlink);
+  });
+
+  test('handleKey reseta cursor para visível', () => {
+    input.onFocus();
+    jest.advanceTimersByTime(530); // cursorVisible toggled to false
+    input.handleKey(key('a', { raw: 'a' }));
+    const lines = input.render(80, 1);
+    expect(lines[0]).toContain('\x1b[7m');
+  });
+
+  test('dispose limpa timer', () => {
+    let updateCount = 0;
+    input.onUpdate = () => { updateCount++; };
+    input.onFocus();
+    input.dispose();
+    jest.advanceTimersByTime(2000);
+    expect(updateCount).toBe(0);
+  });
+
+  test('cursor invisível não renderiza reverse video', () => {
+    input.onFocus();
+    jest.advanceTimersByTime(530); // cursorVisible toggled to false
+    const lines = input.render(80, 1);
+    expect(lines[0]).not.toContain('\x1b[7m');
   });
 });

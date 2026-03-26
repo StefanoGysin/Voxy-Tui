@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, it } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, it, jest } from 'bun:test';
 import { InputBar } from './input-bar';
 import type { DropdownOption } from '../components/dropdown';
 import { stripAnsi } from '../utils/strip-ansi';
@@ -344,5 +344,36 @@ describe('InputBar — completions', () => {
     bar.handleKey(key('enter'));
     expect(completed!.value).toBe('model');
     expect(completed!.label).toBe('/model');
+  });
+});
+
+describe('InputBar — blink propagation', () => {
+  let bar: InputBar;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    bar = new InputBar();
+  });
+
+  afterEach(() => {
+    bar.dispose();
+    jest.useRealTimers();
+  });
+
+  test('onUpdate propaga do TextInput', () => {
+    let updateCount = 0;
+    bar.onUpdate = () => { updateCount++; };
+    bar.onFocus();
+    jest.advanceTimersByTime(530);
+    expect(updateCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('dispose limpa timer do TextInput', () => {
+    let updateCount = 0;
+    bar.onUpdate = () => { updateCount++; };
+    bar.onFocus();
+    bar.dispose();
+    jest.advanceTimersByTime(2000);
+    expect(updateCount).toBe(0);
   });
 });
