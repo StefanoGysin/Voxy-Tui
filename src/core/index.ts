@@ -1,4 +1,4 @@
-export { ESC, bg, clipboardOSC52 } from './ansi';
+export { ESC, bg, clipboardOSC52, FOCUS_EVENT_ENABLE, FOCUS_EVENT_DISABLE } from './ansi';
 export { theme, SELECTED_BORDER } from './theme';
 export type { Theme } from './theme';
 export type { Terminal } from './terminal';
