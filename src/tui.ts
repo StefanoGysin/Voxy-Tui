@@ -2,6 +2,7 @@ import { ProcessTerminal, Renderer, RenderScheduler } from './core';
 import type { Terminal } from './core';
 import { CURSOR_HIDE, CURSOR_SHOW,
          ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING,
+         FOCUS_EVENT_ENABLE, FOCUS_EVENT_DISABLE,
          ERASE_SCREEN, cursorTo,
          ENTER_ALT_SCREEN, EXIT_ALT_SCREEN } from './core/ansi';
 import { ChatLayout } from './chat/chat-layout';
@@ -37,7 +38,7 @@ export class TUI {
     // Funciona em todos os terminais (VS Code, PowerShell, xterm, Windows Terminal).
     // ERASE_SCREEN + cursorTo(1,1) garante estado known-good para o primeiro frame.
     this.terminal.write(
-      ENTER_ALT_SCREEN + CURSOR_HIDE + ENABLE_MOUSE_TRACKING +
+      ENTER_ALT_SCREEN + CURSOR_HIDE + ENABLE_MOUSE_TRACKING + FOCUS_EVENT_ENABLE +
       ERASE_SCREEN + cursorTo(1, 1)
     );
 
@@ -59,7 +60,7 @@ export class TUI {
 
     // Restaurar terminal: desliga mouse, mostra cursor, sai do alternate screen.
     // EXIT_ALT_SCREEN restaura o buffer original com histórico intacto.
-    this.terminal.write(DISABLE_MOUSE_TRACKING + CURSOR_SHOW + EXIT_ALT_SCREEN);
+    this.terminal.write(FOCUS_EVENT_DISABLE + DISABLE_MOUSE_TRACKING + CURSOR_SHOW + EXIT_ALT_SCREEN);
 
     if (this.resizeListener) {
       process.stdout.removeListener('resize', this.resizeListener);
