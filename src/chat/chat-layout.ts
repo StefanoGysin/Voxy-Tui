@@ -277,6 +277,22 @@ export class ChatLayout implements Component {
     return this.inputBar.handleKey(event);
   }
 
+  /**
+   * Notifica o layout sobre mudança de foco do terminal (mode 1004).
+   * A aplicação deve chamar parseFocusEvent() no loop de stdin e passar o resultado aqui.
+   * 'focus-in' → restaura cursor blink no inputBar
+   * 'focus-out' → pausa cursor blink no inputBar
+   */
+  handleFocusChange(type: 'focus-in' | 'focus-out'): void {
+    if (type === 'focus-in') {
+      if (!this.sidebarFocused) {
+        this.inputBar.onFocus();
+      }
+    } else {
+      this.inputBar.onBlur();
+    }
+  }
+
   minHeight(): number {
     const activityHeight = this.activityLog?.visibleLineCount() ?? 0;
     const toastHeight = this.toastComponent?.visibleLineCount() ?? 0;
