@@ -31,6 +31,7 @@ export class TextInput implements Component {
   private focused = false;
   private cursorVisible = true;
   private blinkTimer?: ReturnType<typeof setInterval>;
+  private lastKeystrokeAt = 0;
   private readonly options: Required<TextInputOptions>;
 
   onSubmit?: (text: string) => void;
@@ -106,6 +107,7 @@ export class TextInput implements Component {
   private startBlink(): void {
     this.stopBlink();
     this.blinkTimer = setInterval(() => {
+      if (Date.now() - this.lastKeystrokeAt < 530) return;
       this.cursorVisible = !this.cursorVisible;
       this.onUpdate?.();
     }, 530);
@@ -252,7 +254,7 @@ export class TextInput implements Component {
     // Reset blink: cursor fica visível ao digitar
     if (this.focused) {
       this.cursorVisible = true;
-      this.startBlink();
+      this.lastKeystrokeAt = Date.now();
     }
 
     const { key, ctrl, shift } = event;
