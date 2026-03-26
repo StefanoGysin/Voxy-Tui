@@ -20,7 +20,6 @@ const SEL_RST = '\x1b[49m';  // reset background only (preserva foreground/bold/
 const SCROLLBAR_SEP   = `${theme.scrollbarSepFg}│${RESET}`;
 const SCROLLBAR_THUMB = `${theme.scrollbarThumbBg}${theme.scrollbarThumbFg}▐${RESET}`;
 const SCROLLBAR_TRACK = `${theme.scrollbarTrackBg}${theme.scrollbarTrackFg}╎${RESET}`;
-const SCROLLBAR_HINT_BORDER = `${theme.scrollbarSepFg}│${RESET}`;
 const MARGIN_LEFT = 2;  // espaço de respiração à esquerda do conteúdo
 const SCROLLBAR_PAGE_LINES = 10;
 
@@ -134,7 +133,7 @@ function generateToolSummary(msg: ChatMessage, maxWidth: number): string {
   }
 }
 
-function renderToolMessage(msg: ChatMessage, width: number): { lines: string[], bgs: string[] } {
+function renderToolMessage(msg: ChatMessage, width: number): { lines: string[], bgs: (string | null)[] } {
   const rawName = msg.toolName ?? 'Tool';
   const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   const output = msg.toolOutput ?? [];
@@ -528,8 +527,7 @@ export class MessageList implements Component {
     const clampedOffset = Math.min(this.scrollOffset, maxOffset);
     const end = total - clampedOffset;
     const start = end - height;
-    const hintOffset = clampedOffset > 0 ? 1 : 0;
-    return start + (screenY - 1) - hintOffset;
+    return start + (screenY - 1);
   }
 
   /**
@@ -932,25 +930,6 @@ export class MessageList implements Component {
     const start = end - height;
 
     const scrollbar = this.renderScrollbar(height, allLines.length, maxOffset);
-
-    if (this.scrollOffset > 0) {
-      const prefix = `▴ ${this.scrollOffset} linhas acima `;
-      const prefixWidth = measureWidth(prefix);
-      const dashCount = Math.max(0, textWidth - prefixWidth - 1);
-      const hintLine = `${theme.textDim}${DIM}${prefix}${'─'.repeat(dashCount)}${RESET}`;
-      const hintRow = SCROLLBAR_HINT_BORDER + ' ' + fitWidth(hintLine, textWidth) + SCROLLBAR_SEP + scrollbar[0];
-
-      const contentSlice = allLines.slice(start, start + height - 1);
-      const contentRows = contentSlice.map((line, i) => {
-        const allLineIdx = start + i;
-        const hl = this.applySelHL(line, allLineIdx, selFromIdx, selFromX, selToIdx, selToX);
-        const border = allLineBorders[allLineIdx] ?? ' ';
-        const composed = border + ' ' + fitWidth(hl, textWidth) + SCROLLBAR_SEP + scrollbar[i + 1];
-        return applyLineBg(composed, allLineBgs[allLineIdx]);
-      });
-
-      return [hintRow, ...contentRows];
-    }
 
     const sliced = allLines.slice(start, end);
     return sliced.map((line, i) => {
