@@ -122,6 +122,9 @@ input.dispose(): void        // limpa blink timer
 // Quando ativo (lineCount > 0), handleKey delega ao slot com prioridade sobre scroll e inputBar
 // handleMouse roteia clicks na área do permission dialog para handleMouse do slot (com coordenadas localizadas)
 // handleMouse: click fora de messageList/sidebar/permission → foca inputBar (restaura cursor)
+// handleFocusChange(type: 'focus-in' | 'focus-out'): void — notifica focus do terminal (mode 1004)
+// Aplicação deve chamar parseFocusEvent() no stdin loop e passar resultado aqui.
+// focus-in restaura blink (se sidebar não focado); focus-out pausa blink.
 // hasActivePermissionDialog(): boolean — retorna true se o slot está ativo (lineCount > 0)
 // setSidebar(sidebar: Sidebar | null): void — sidebar à direita do chat (~30% width, min 28, max 40)
 // toggleSidebarFocus(): void — alterna foco entre chat e sidebar
