@@ -533,6 +533,64 @@ describe('ChatLayout — sidebar mouse routing', () => {
   });
 });
 
+describe('ChatLayout — handleFocusChange', () => {
+  let layout: ChatLayout;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    layout = new ChatLayout();
+  });
+
+  afterEach(() => {
+    layout.inputBar.dispose();
+    layout.statusBar.dispose();
+    jest.useRealTimers();
+  });
+
+  test('focus-out chama onBlur no inputBar (cursor para de piscar)', () => {
+    // inputBar começa focado (constructor chama onFocus)
+    let updateCalled = false;
+    layout.inputBar.onUpdate = () => { updateCalled = true; };
+
+    layout.handleFocusChange('focus-out');
+
+    // Avançar 530ms — blink NÃO deve disparar (blur parou o timer)
+    updateCalled = false;
+    jest.advanceTimersByTime(530);
+    expect(updateCalled).toBe(false);
+  });
+
+  test('focus-in restaura onFocus no inputBar (blink retoma)', () => {
+    layout.handleFocusChange('focus-out');
+
+    let updateCalled = false;
+    layout.inputBar.onUpdate = () => { updateCalled = true; };
+
+    layout.handleFocusChange('focus-in');
+
+    // Avançar 530ms — blink DEVE disparar
+    jest.advanceTimersByTime(530);
+    expect(updateCalled).toBe(true);
+  });
+
+  test('focus-in com sidebar focado NÃO foca inputBar', () => {
+    const sidebar = new Sidebar();
+    sidebar.addTab(createFakeTab('tab1', 'Test'));
+    layout.setSidebar(sidebar);
+    sidebar.setVisible(true);
+    layout.toggleSidebarFocus(); // foco no sidebar → inputBar.onBlur()
+
+    let updateCalled = false;
+    layout.inputBar.onUpdate = () => { updateCalled = true; };
+
+    layout.handleFocusChange('focus-in');
+
+    // Blink NÃO deve retomar — sidebar tem foco
+    jest.advanceTimersByTime(530);
+    expect(updateCalled).toBe(false);
+  });
+});
+
 // --- Helper: cria um PermissionDialogSlot fake ---
 function createFakePermSlot(lines: string[], active: boolean): PermissionDialogSlot {
   return {
