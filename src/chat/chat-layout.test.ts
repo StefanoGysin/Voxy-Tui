@@ -45,6 +45,7 @@ describe('ChatLayout', () => {
 
   test('statusBar fica acima do inputBar', () => {
     layout = new ChatLayout();
+    layout.inputBar.onBlur();
     layout.statusBar.setModel('test-model');
     const lines = layout.render(80, 10).map((l: string) => stripAnsi(l));
     // inputBar é a última linha (placeholder), statusBar fica logo acima do separador
@@ -201,11 +202,12 @@ describe('ChatLayout — handleMouse', () => {
     expect(typeof result).toBe('boolean');
   });
 
-  test('handleMouse abaixo da área de mensagens → retorna false', () => {
+  test('handleMouse abaixo da área de mensagens → foca input e retorna true', () => {
     layout = new ChatLayout();
     layout.render(80, 30);
+    layout.inputBar.onBlur();
     const result = layout.handleMouse({ x: 10, y: 30, button: 0, isRelease: false });
-    expect(result).toBe(false);
+    expect(result).toBe(true);
   });
 
   test('handleMouseDrag na área de mensagens → delega para messageList', () => {
