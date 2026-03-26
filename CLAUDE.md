@@ -254,8 +254,9 @@ import { theme } from 'voxy-tui';
 // theme.toastModeBg, toastSuccessBg, toastWarningBg, toastErrorBg, toastInfoBg — backgrounds de toast
 // theme.statusStreamingFg, statusErrorFg, statusIdleFg, statusModelFg, statusTokensFg — cores do StatusBar
 // theme.toolMsgBg — bg(15, 20, 42) — fundo azul royal para tool messages (anti-bleed aplicado na composição)
-// theme.userMsgBg — bg(12, 16, 26) — fundo sutil para user messages
-// theme.assistantMsgBg — bg(12, 16, 26) — fundo sutil para assistant messages
+// theme.userMsgBg — bg(12, 16, 26) — fundo para user messages (= panelBg, token separado para customização)
+// theme.assistantMsgBg — bg(12, 16, 26) — fundo para assistant messages (= panelBg, token separado para customização)
+// theme.userTextStyle — ITALIC — estilo ANSI aplicado ao texto do user
 // theme.userTextFg — fg(34, 211, 238) — cor cyan do texto e borda do user
 // theme.toolNameFg, toolRunningFg, toolDoneFg, toolErrorFg, toolLabelFg — cores do ToolActivityLog
 // Anti-bleed pattern: padded.replaceAll(RESET, RESET + bg) — previne bleed de background quando ANSI RESET aparece mid-line
