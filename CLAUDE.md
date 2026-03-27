@@ -197,6 +197,8 @@ tui.layout: ChatLayout  // acesso direto ao layout
 // em ambos os paths (primeiro render e diff) — elimina cursor drift cumulativo.
 // start() habilita FOCUS_EVENT_ENABLE (mode 1004) para detectar focus-in/focus-out do terminal.
 // stop() emite FOCUS_EVENT_DISABLE antes de restaurar terminal.
+// start() chama inputBar.onFocus() para iniciar cursor blink.
+// stop() chama inputBar.dispose() para limpar timer de blink.
 ```
 
 ### Renderer
