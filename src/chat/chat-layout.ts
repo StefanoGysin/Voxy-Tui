@@ -46,7 +46,6 @@ export class ChatLayout implements Component {
     this.messageList = new MessageList();
     this.inputBar = new InputBar({ placeholder: 'Type a message…' });
     this.statusBar = new StatusBar();
-    this.inputBar.onFocus();
   }
 
   /**

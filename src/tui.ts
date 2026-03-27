@@ -42,6 +42,8 @@ export class TUI {
       ERASE_SCREEN + cursorTo(1, 1)
     );
 
+    this.layout.inputBar.onFocus();
+
     this.resizeListener = () => {
       this.renderer.invalidate();
       this.scheduler.scheduleRender();
@@ -56,6 +58,7 @@ export class TUI {
     if (!this.running) return;
     this.running = false;
     this.scheduler.dispose();
+    this.layout.inputBar.dispose();
     this.layout.statusBar.dispose();
 
     // Restaurar terminal: desliga mouse, mostra cursor, sai do alternate screen.
