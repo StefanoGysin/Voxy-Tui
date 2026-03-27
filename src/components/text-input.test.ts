@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach, jest } from 'bun:test';
 import { TextInput } from './text-input';
 import type { KeyEvent } from '../core/component';
 
@@ -84,5 +84,80 @@ describe('TextInput', () => {
     t.setValue('linha1\nlinha2\nlinha3');
     expect(t.getValue()).toBe('linha1\nlinha2\nlinha3');
     expect(t.render(80, 10).length).toBe(3);
+  });
+});
+
+describe('TextInput — cursor blink', () => {
+  let input: TextInput;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    input = new TextInput();
+  });
+
+  afterEach(() => {
+    input.dispose();
+    jest.useRealTimers();
+  });
+
+  test('onFocus inicia blink timer', () => {
+    let updateCount = 0;
+    input.onUpdate = () => { updateCount++; };
+    input.onFocus();
+    jest.advanceTimersByTime(530);
+    expect(updateCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('onBlur para blink e reseta cursorVisible', () => {
+    let updateCount = 0;
+    input.onUpdate = () => { updateCount++; };
+    input.onFocus();
+    jest.advanceTimersByTime(530);
+    const countAfterBlink = updateCount;
+    input.onBlur();
+    jest.advanceTimersByTime(530);
+    expect(updateCount).toBe(countAfterBlink);
+  });
+
+  test('handleKey reseta cursor para visível', () => {
+    input.onFocus();
+    jest.advanceTimersByTime(530); // cursorVisible toggled to false
+    input.handleKey(key('a', { raw: 'a' }));
+    const lines = input.render(80, 1);
+    expect(lines[0]).toContain('\x1b[7m');
+  });
+
+  test('dispose limpa timer', () => {
+    let updateCount = 0;
+    input.onUpdate = () => { updateCount++; };
+    input.onFocus();
+    input.dispose();
+    jest.advanceTimersByTime(2000);
+    expect(updateCount).toBe(0);
+  });
+
+  test('onFocus duplo não reinicia blink timer (idempotente)', () => {
+    input.onFocus();
+
+    // Avançar 300ms (meio ciclo de blink)
+    jest.advanceTimersByTime(300);
+
+    // Segundo onFocus — NÃO deve reiniciar o timer
+    input.onFocus();
+
+    // Avançar mais 230ms (total 530ms desde o primeiro onFocus)
+    // Se o timer foi reiniciado, o blink NÃO teria disparado ainda
+    // Se o timer foi preservado (idempotente), o blink DEVE disparar
+    let updateCalled = false;
+    input.onUpdate = () => { updateCalled = true; };
+    jest.advanceTimersByTime(230);
+    expect(updateCalled).toBe(true);
+  });
+
+  test('cursor invisível não renderiza reverse video', () => {
+    input.onFocus();
+    jest.advanceTimersByTime(530); // cursorVisible toggled to false
+    const lines = input.render(80, 1);
+    expect(lines[0]).not.toContain('\x1b[7m');
   });
 });

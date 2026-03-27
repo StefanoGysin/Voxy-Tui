@@ -98,6 +98,11 @@ export class ChatLayout implements Component {
   toggleSidebarFocus(): void {
     if (!this.sidebarComponent?.isVisible()) return;
     this.sidebarFocused = !this.sidebarFocused;
+    if (this.sidebarFocused) {
+      this.inputBar.onBlur();
+    } else {
+      this.inputBar.onFocus();
+    }
   }
 
   render(width: number, height: number): string[] {
@@ -171,6 +176,7 @@ export class ChatLayout implements Component {
     // Se sidebar visível e click no lado direito → rotear ao sidebar
     if (sidebarVisible && this.lastSidebarWidth > 0 && event.x > this.lastChatWidth) {
       this.sidebarFocused = true;
+      this.inputBar.onBlur();
       const sidebarEvent: MouseClickEvent = {
         ...event,
         x: event.x - this.lastChatWidth,
@@ -181,6 +187,7 @@ export class ChatLayout implements Component {
     // Click no chat → tirar foco do sidebar
     if (sidebarVisible) {
       this.sidebarFocused = false;
+      this.inputBar.onFocus();
     }
 
     // Routing normal do chat
@@ -199,7 +206,10 @@ export class ChatLayout implements Component {
       }
     }
 
-    return false;
+    // Click fora de messageList/sidebar/permission → focar input
+    this.sidebarFocused = false;
+    this.inputBar.onFocus();
+    return true;
   }
 
   /**
@@ -264,6 +274,22 @@ export class ChatLayout implements Component {
 
     // === Tudo o resto vai para o InputBar ===
     return this.inputBar.handleKey(event);
+  }
+
+  /**
+   * Notifica o layout sobre mudança de foco do terminal (mode 1004).
+   * A aplicação deve chamar parseFocusEvent() no loop de stdin e passar o resultado aqui.
+   * 'focus-in' → restaura cursor blink no inputBar
+   * 'focus-out' → pausa cursor blink no inputBar
+   */
+  handleFocusChange(type: 'focus-in' | 'focus-out'): void {
+    if (type === 'focus-in') {
+      if (!this.sidebarFocused) {
+        this.inputBar.onFocus();
+      }
+    } else {
+      this.inputBar.onBlur();
+    }
   }
 
   minHeight(): number {

@@ -23,12 +23,14 @@ export class InputBar implements Component {
   onSubmit?: (text: string) => void;
   onChange?: (text: string) => void;
   onComplete?: (option: DropdownOption) => void;
+  onUpdate?: () => void;
 
   constructor(options: InputBarOptions = {}) {
     const { separatorChar = '─', maxCompletions = 8, ...inputOptions } = options;
     this.separatorChar = separatorChar;
     this.dropdown = new Dropdown({ maxVisible: maxCompletions });
     this.input = new TextInput(inputOptions);
+    this.input.onUpdate = () => this.onUpdate?.();
     this.input.onSubmit = (text) => {
       if (text.trim()) {
         // Evitar duplicatas consecutivas
@@ -56,6 +58,10 @@ export class InputBar implements Component {
 
   clear(): void {
     this.input.clear();
+  }
+
+  dispose(): void {
+    this.input.dispose();
   }
 
   onFocus(): void {

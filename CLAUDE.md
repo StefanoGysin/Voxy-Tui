@@ -101,6 +101,10 @@ spinner.stop(): void
 // render() sempre retorna exactly this.lines.length linhas
 input.onSubmit?: (text: string) => void
 input.onChange?: (text: string) => void
+input.onUpdate?: () => void  // callback para re-render (ex: cursor blink)
+input.dispose(): void        // limpa blink timer
+// Cursor blink: ~530ms, reseta ao digitar. cursorVisible controla renderização.
+// onFocus() inicia blink, onBlur() para blink e reseta cursorVisible=true.
 ```
 
 ### MessageList / ChatLayout
@@ -117,6 +121,10 @@ input.onChange?: (text: string) => void
 // PermissionDialogSlot: { render(width): string[], handleKey(event): boolean, lineCount(): number, handleMouse?(event): boolean }
 // Quando ativo (lineCount > 0), handleKey delega ao slot com prioridade sobre scroll e inputBar
 // handleMouse roteia clicks na área do permission dialog para handleMouse do slot (com coordenadas localizadas)
+// handleMouse: click fora de messageList/sidebar/permission → foca inputBar (restaura cursor)
+// handleFocusChange(type: 'focus-in' | 'focus-out'): void — notifica focus do terminal (mode 1004)
+// Aplicação deve chamar parseFocusEvent() no stdin loop e passar resultado aqui.
+// focus-in restaura blink (se sidebar não focado); focus-out pausa blink.
 // hasActivePermissionDialog(): boolean — retorna true se o slot está ativo (lineCount > 0)
 // setSidebar(sidebar: Sidebar | null): void — sidebar à direita do chat (~30% width, min 28, max 40)
 // toggleSidebarFocus(): void — alterna foco entre chat e sidebar
@@ -166,6 +174,8 @@ log.onUpdate?: () => void  // callback a cada FRAME_INTERVAL_MS enquanto há run
 bar.getHistory(): string[]              // cópia do histórico
 bar.setHistory(entries: string[]): void // carrega histórico de sessão anterior
 bar.clearHistory(): void
+bar.onUpdate?: () => void               // callback para re-render (propaga do TextInput)
+bar.dispose(): void                     // limpa timers do TextInput
 // Duplicatas consecutivas são ignoradas. Entradas vazias (trim) não são salvas.
 ```
 
@@ -185,6 +195,10 @@ tui.layout: ChatLayout  // acesso direto ao layout
 // pós-resize, limpando a tela visível sem poluir o scrollback.
 // Renderer.render() ancora cursor na última linha com cursorTo(length, 1)
 // em ambos os paths (primeiro render e diff) — elimina cursor drift cumulativo.
+// start() habilita FOCUS_EVENT_ENABLE (mode 1004) para detectar focus-in/focus-out do terminal.
+// stop() emite FOCUS_EVENT_DISABLE antes de restaurar terminal.
+// start() chama inputBar.onFocus() para iniciar cursor blink.
+// stop() chama inputBar.dispose() para limpar timer de blink.
 ```
 
 ### Renderer

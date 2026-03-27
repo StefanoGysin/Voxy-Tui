@@ -35,6 +35,10 @@ export const EXIT_ALT_SCREEN  = '\x1b[?1049l'; // Sai da tela alternativa (resta
 export const ENABLE_MOUSE_TRACKING  = '\x1b[?1002h\x1b[?1006h';
 export const DISABLE_MOUSE_TRACKING = '\x1b[?1002l\x1b[?1006l';
 
+// Terminal focus events (mode 1004)
+export const FOCUS_EVENT_ENABLE  = '\x1b[?1004h';
+export const FOCUS_EVENT_DISABLE = '\x1b[?1004l';
+
 /**
  * Gera sequência OSC 52 para escrever texto no clipboard do terminal.
  * Funciona em WezTerm, iTerm2, Kitty, Windows Terminal, GNOME Terminal 3.36+.
