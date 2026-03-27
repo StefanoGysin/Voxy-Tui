@@ -45,7 +45,6 @@ describe('ChatLayout', () => {
 
   test('statusBar fica acima do inputBar', () => {
     layout = new ChatLayout();
-    layout.inputBar.onBlur();
     layout.statusBar.setModel('test-model');
     const lines = layout.render(80, 10).map((l: string) => stripAnsi(l));
     // inputBar é a última linha (placeholder), statusBar fica logo acima do separador
@@ -205,7 +204,6 @@ describe('ChatLayout — handleMouse', () => {
   test('handleMouse abaixo da área de mensagens → foca input e retorna true', () => {
     layout = new ChatLayout();
     layout.render(80, 30);
-    layout.inputBar.onBlur();
     const result = layout.handleMouse({ x: 10, y: 30, button: 0, isRelease: false });
     expect(result).toBe(true);
   });
@@ -548,7 +546,7 @@ describe('ChatLayout — handleFocusChange', () => {
   });
 
   test('focus-out chama onBlur no inputBar (cursor para de piscar)', () => {
-    // inputBar começa focado (constructor chama onFocus)
+    layout.inputBar.onFocus(); // iniciar blink explicitamente
     let updateCalled = false;
     layout.inputBar.onUpdate = () => { updateCalled = true; };
 
@@ -561,6 +559,7 @@ describe('ChatLayout — handleFocusChange', () => {
   });
 
   test('focus-in restaura onFocus no inputBar (blink retoma)', () => {
+    layout.inputBar.onFocus(); // iniciar blink explicitamente
     layout.handleFocusChange('focus-out');
 
     let updateCalled = false;
@@ -574,6 +573,7 @@ describe('ChatLayout — handleFocusChange', () => {
   });
 
   test('focus-in com sidebar focado NÃO foca inputBar', () => {
+    layout.inputBar.onFocus(); // iniciar blink explicitamente
     const sidebar = new Sidebar();
     sidebar.addTab(createFakeTab('tab1', 'Test'));
     layout.setSidebar(sidebar);
