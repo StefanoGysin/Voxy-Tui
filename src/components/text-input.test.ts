@@ -136,6 +136,24 @@ describe('TextInput — cursor blink', () => {
     expect(updateCount).toBe(0);
   });
 
+  test('onFocus duplo não reinicia blink timer (idempotente)', () => {
+    input.onFocus();
+
+    // Avançar 300ms (meio ciclo de blink)
+    jest.advanceTimersByTime(300);
+
+    // Segundo onFocus — NÃO deve reiniciar o timer
+    input.onFocus();
+
+    // Avançar mais 230ms (total 530ms desde o primeiro onFocus)
+    // Se o timer foi reiniciado, o blink NÃO teria disparado ainda
+    // Se o timer foi preservado (idempotente), o blink DEVE disparar
+    let updateCalled = false;
+    input.onUpdate = () => { updateCalled = true; };
+    jest.advanceTimersByTime(230);
+    expect(updateCalled).toBe(true);
+  });
+
   test('cursor invisível não renderiza reverse video', () => {
     input.onFocus();
     jest.advanceTimersByTime(530); // cursorVisible toggled to false

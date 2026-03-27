@@ -71,12 +71,14 @@ export class TextInput implements Component {
   // ── Focus ─────────────────────────────────────────────────────────────────
 
   onFocus(): void {
+    if (this.focused) return;
     this.focused = true;
     this.cursorVisible = true;
     this.startBlink();
   }
 
   onBlur(): void {
+    if (!this.focused) return;
     this.focused = false;
     this.cursorVisible = true;
     this.stopBlink();
