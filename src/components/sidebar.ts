@@ -33,6 +33,8 @@ export interface SidebarTab {
    * Retorna true se consumiu o evento.
    */
   handleMouse?(contentRow: number, contentCol: number, event: MouseClickEvent): boolean;
+  /** Título dinâmico da tab (exibido no header do sidebar). Se ausente, usa título padrão do sidebar. */
+  getTitle?(): string;
   /** Hints de teclado para o footer (ex: "↑↓ navegar · enter selecionar"). */
   getHints(): string;
 }
@@ -263,7 +265,9 @@ export class Sidebar implements Component {
   // --- Private render helpers ---
 
   private renderHeader(innerWidth: number): string {
-    const left = ` ${this.titleFg}${BOLD}${this.title}${RESET}`;
+    const activeTab = this.tabs[this.activeTabIndex];
+    const displayTitle = activeTab?.getTitle?.() ?? this.title;
+    const left = ` ${this.titleFg}${BOLD}${displayTitle}${RESET}`;
     const right = `${this.hintsFg}${this.closeHint}${RESET} `;
     const leftVisual = measureWidth(stripAnsi(left));
     const rightVisual = measureWidth(stripAnsi(right));

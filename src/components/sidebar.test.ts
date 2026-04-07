@@ -356,6 +356,54 @@ describe('Sidebar', () => {
     });
   });
 
+  describe('dynamic tab title (getTitle)', () => {
+    it('uses getTitle from active tab in header', () => {
+      const s = new Sidebar();
+      s.addTab(makeTab({
+        id: 'a',
+        label: 'A',
+        getTitle: () => 'Título Custom',
+      }));
+      s.setVisible(true);
+      const lines = s.render(40, 8);
+      const header = stripAnsi(lines[0]);
+      expect(header).toContain('Título Custom');
+      expect(header).not.toContain('Configurações');
+    });
+
+    it('falls back to default title when tab has no getTitle', () => {
+      const s = new Sidebar();
+      s.addTab(makeTab({ id: 'a', label: 'A' }));
+      s.setVisible(true);
+      const lines = s.render(40, 8);
+      const header = stripAnsi(lines[0]);
+      expect(header).toContain('Configurações');
+    });
+
+    it('header updates when switching tabs with different titles', () => {
+      const s = new Sidebar();
+      s.addTab(makeTab({
+        id: 'a',
+        label: 'A',
+        getTitle: () => 'Título A',
+      }));
+      s.addTab(makeTab({
+        id: 'b',
+        label: 'B',
+        getTitle: () => 'Título B',
+      }));
+      s.setVisible(true);
+
+      const headerA = stripAnsi(s.render(40, 8)[0]);
+      expect(headerA).toContain('Título A');
+
+      s.setActiveTab('b');
+      const headerB = stripAnsi(s.render(40, 8)[0]);
+      expect(headerB).toContain('Título B');
+      expect(headerB).not.toContain('Título A');
+    });
+  });
+
   describe('custom options', () => {
     it('accepts custom title', () => {
       const s = new Sidebar({ title: 'Settings' });
