@@ -43,7 +43,6 @@ export interface Theme {
   readonly statusErrorFg: string;
   readonly statusIdleFg: string;
   readonly statusModelFg: string;
-  readonly statusTokensFg: string;
   readonly statusContextNormalFg: string;
   readonly statusContextWarningFg: string;
   readonly statusContextDangerFg: string;
@@ -136,7 +135,6 @@ export const theme: Theme = {
   statusErrorFg: fg(239, 68, 68),
   statusIdleFg: fg(139, 148, 158),
   statusModelFg: fg(34, 211, 238),
-  statusTokensFg: fg(139, 148, 158),
   statusContextNormalFg: fg(139, 148, 158),
   statusContextWarningFg: fg(234, 179, 8),
   statusContextDangerFg: fg(239, 68, 68),
