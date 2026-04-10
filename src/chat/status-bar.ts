@@ -6,6 +6,7 @@ import { measureWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 
 export type StatusMode = 'idle' | 'streaming' | 'thinking' | 'error';
+export type ThinkingLevel = 'off' | 'auto' | 'high' | 'max';
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(Math.floor(n / 100_000) / 10).toFixed(1)}M`;
@@ -20,7 +21,7 @@ export class StatusBar implements Component {
   private status = '';
   private contextUsed = 0;
   private contextTotal = 0;
-  private thinkingLevel = 'off';
+  private thinkingLevel: ThinkingLevel = 'off';
   private frameIndex = 0;
   private timer?: ReturnType<typeof setInterval>;
 
@@ -48,7 +49,7 @@ export class StatusBar implements Component {
     this.contextTotal = total;
   }
 
-  setThinking(level: string): void {
+  setThinking(level: ThinkingLevel): void {
     this.thinkingLevel = level;
   }
 

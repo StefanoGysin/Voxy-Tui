@@ -2,7 +2,7 @@ export type { ChatMessage, MessageRole } from './types';
 export { MessageList } from './message-list';
 export { InputBar } from './input-bar';
 export { StatusBar } from './status-bar';
-export type { StatusMode } from './status-bar';
+export type { StatusMode, ThinkingLevel } from './status-bar';
 export { ToolCall } from './tool-call';
 export type { ToolStatus } from './tool-call';
 export { Markdown, renderMarkdown } from './markdown';
