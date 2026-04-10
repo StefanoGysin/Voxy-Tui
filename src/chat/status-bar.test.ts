@@ -24,28 +24,11 @@ describe('StatusBar', () => {
     expect(line).toContain('claude-opus-4-6');
   });
 
-  test('tokens aparecem quando definidos', () => {
-    bar = new StatusBar();
-    bar.setTokens(1234, 567);
-    const line = stripAnsi(bar.render(80, 1)[0]);
-    expect(line).toContain('1234');
-    expect(line).toContain('567');
-  });
-
   test('status text aparece no modo idle', () => {
     bar = new StatusBar();
     bar.setStatus('Ready');
     const line = stripAnsi(bar.render(80, 1)[0]);
     expect(line).toContain('Ready');
-  });
-
-  test('render retorna linha com conteúdo', () => {
-    bar = new StatusBar();
-    bar.setModel('gpt-4o');
-    bar.setTokens(100, 50);
-    const line = bar.render(60, 1)[0];
-    const stripped = stripAnsi(line);
-    expect(stripped.length).toBeGreaterThan(0);
   });
 
   test('modo error mostra símbolo de erro', () => {
@@ -60,5 +43,59 @@ describe('StatusBar', () => {
   test('dispose não lança erros mesmo sem timer', () => {
     bar = new StatusBar();
     expect(() => bar.dispose()).not.toThrow();
+  });
+
+  test('setContextUsage mostra tokens formatados', () => {
+    bar = new StatusBar();
+    bar.setModel('gpt-5.2');
+    bar.setContextUsage(11000, 200000);
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).toContain('11k / 200k');
+  });
+
+  test('contexto > 80% renderiza sem erro', () => {
+    bar = new StatusBar();
+    bar.setModel('gpt-5.2');
+    bar.setContextUsage(170000, 200000);
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).toContain('170k / 200k');
+  });
+
+  test('setThinking auto mostra Thinking e auto', () => {
+    bar = new StatusBar();
+    bar.setThinking('auto');
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).toContain('Thinking');
+    expect(line).toContain('auto');
+  });
+
+  test('setThinking off não mostra Thinking', () => {
+    bar = new StatusBar();
+    bar.setThinking('off');
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).not.toContain('Thinking');
+  });
+
+  test('modelo + contexto + thinking com separador │', () => {
+    bar = new StatusBar();
+    bar.setModel('gpt-5.2');
+    bar.setContextUsage(11000, 200000);
+    bar.setThinking('auto');
+    bar.setStatus('Copilot');
+    const line = stripAnsi(bar.render(120, 1)[0]);
+    expect(line).toContain('Copilot');
+    expect(line).toContain('│');
+    expect(line).toContain('gpt-5.2');
+    expect(line).toContain('11k / 200k');
+    expect(line).toContain('Thinking');
+    expect(line).toContain('auto');
+  });
+
+  test('modelo sem contexto mostra só o nome', () => {
+    bar = new StatusBar();
+    bar.setModel('gpt-5.2');
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).toContain('gpt-5.2');
+    expect(line).not.toContain('/');
   });
 });

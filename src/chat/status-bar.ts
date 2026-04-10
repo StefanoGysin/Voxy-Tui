@@ -7,12 +7,19 @@ import { stripAnsi } from '../utils/strip-ansi';
 
 export type StatusMode = 'idle' | 'streaming' | 'thinking' | 'error';
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(Math.floor(n / 100_000) / 10).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.floor(n / 1_000)}k`;
+  return `${n}`;
+}
+
 export class StatusBar implements Component {
   private mode: StatusMode = 'idle';
   private model = '';
   private status = '';
-  private inputTokens = 0;
-  private outputTokens = 0;
+  private contextUsed = 0;
+  private contextTotal = 0;
+  private thinkingLevel = 'off';
   private frameIndex = 0;
   private timer?: ReturnType<typeof setInterval>;
 
@@ -35,9 +42,13 @@ export class StatusBar implements Component {
     this.status = text;
   }
 
-  setTokens(input: number, output: number): void {
-    this.inputTokens = input;
-    this.outputTokens = output;
+  setContextUsage(used: number, total: number): void {
+    this.contextUsed = used;
+    this.contextTotal = total;
+  }
+
+  setThinking(level: string): void {
+    this.thinkingLevel = level;
   }
 
   dispose(): void {
@@ -49,7 +60,9 @@ export class StatusBar implements Component {
   }
 
   render(width: number, _height: number): string[] {
-    // Left section
+    const sep = ` ${theme.statusSeparatorFg}│${RESET} `;
+
+    // Left section — status
     let left = '';
     if (this.mode === 'streaming' || this.mode === 'thinking') {
       const frame = BRAILLE_FRAMES[this.frameIndex % BRAILLE_FRAMES.length];
@@ -61,20 +74,45 @@ export class StatusBar implements Component {
       left = `${theme.statusIdleFg}${this.status}${RESET}`;
     }
 
-    // Right section
-    let right = '';
+    // Center section — model + context
+    let center = '';
     if (this.model) {
-      right = `${theme.statusModelFg}${this.model}${RESET}`;
+      center = `${theme.statusModelFg}${this.model}${RESET}`;
+      if (this.contextTotal > 0) {
+        const ratio = this.contextUsed / this.contextTotal;
+        const ctxFg = ratio > 0.8
+          ? theme.statusContextDangerFg
+          : ratio >= 0.6
+            ? theme.statusContextWarningFg
+            : theme.statusContextNormalFg;
+        center += `: ${ctxFg}${formatTokens(this.contextUsed)} / ${formatTokens(this.contextTotal)}${RESET}`;
+      }
     }
-    if (this.inputTokens > 0 || this.outputTokens > 0) {
-      right += ` ${theme.statusTokensFg}↑${this.inputTokens} ↓${this.outputTokens}${RESET}`;
+
+    // Right section — thinking
+    let right = '';
+    if (this.thinkingLevel !== 'off') {
+      right = `${theme.statusThinkingFg}Thinking${RESET} [${theme.statusThinkingDotFg}●${this.thinkingLevel}${RESET}]`;
     }
+
+    // Join non-empty sections with separator
+    const rightParts = [center, right].filter(Boolean);
+    const rightSide = rightParts.join(sep);
 
     const leftWidth = measureWidth(stripAnsi(left));
-    const rightWidth = measureWidth(stripAnsi(right));
+    const rightWidth = measureWidth(stripAnsi(rightSide));
     const padding = ' '.repeat(Math.max(1, width - leftWidth - rightWidth));
 
-    return [left + padding + right];
+    if (left && rightSide) {
+      return [left + padding + rightSide];
+    }
+    if (left) {
+      return [left + ' '.repeat(Math.max(0, width - leftWidth))];
+    }
+    if (rightSide) {
+      return [' '.repeat(Math.max(0, width - rightWidth)) + rightSide];
+    }
+    return [' '.repeat(width)];
   }
 
   private startTimer(): void {
