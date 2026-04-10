@@ -94,7 +94,7 @@ export class StatusBar implements Component {
     // Right section — thinking
     let right = '';
     if (this.thinkingLevel !== 'off') {
-      right = `${theme.statusThinkingFg}Thinking${RESET} [${theme.statusThinkingDotFg}●${this.thinkingLevel}${RESET}]`;
+      right = `${theme.statusThinkingFg}Thinking${RESET} [${theme.statusThinkingDotFg}● ${this.thinkingLevel}${RESET}]`;
     }
 
     // Join non-empty sections with separator
