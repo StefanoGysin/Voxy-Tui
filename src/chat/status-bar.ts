@@ -9,7 +9,8 @@ export type StatusMode = 'idle' | 'streaming' | 'thinking' | 'error';
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(Math.floor(n / 100_000) / 10).toFixed(1)}M`;
-  if (n >= 1_000) return `${Math.floor(n / 1_000)}k`;
+  if (n >= 100_000) return `${Math.floor(n / 1_000)}k`;
+  if (n >= 1_000) return `${(Math.floor(n / 100) / 10).toFixed(1)}k`;
   return `${n}`;
 }
 

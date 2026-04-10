@@ -50,7 +50,7 @@ describe('StatusBar', () => {
     bar.setModel('gpt-5.2');
     bar.setContextUsage(11000, 200000);
     const line = stripAnsi(bar.render(80, 1)[0]);
-    expect(line).toContain('11k / 200k');
+    expect(line).toContain('11.0k / 200k');
   });
 
   test('contexto > 80% renderiza sem erro', () => {
@@ -86,7 +86,7 @@ describe('StatusBar', () => {
     expect(line).toContain('Copilot');
     expect(line).toContain('│');
     expect(line).toContain('gpt-5.2');
-    expect(line).toContain('11k / 200k');
+    expect(line).toContain('11.0k / 200k');
     expect(line).toContain('Thinking');
     expect(line).toContain('auto');
   });
