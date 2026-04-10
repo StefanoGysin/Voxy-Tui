@@ -44,6 +44,12 @@ export interface Theme {
   readonly statusIdleFg: string;
   readonly statusModelFg: string;
   readonly statusTokensFg: string;
+  readonly statusContextNormalFg: string;
+  readonly statusContextWarningFg: string;
+  readonly statusContextDangerFg: string;
+  readonly statusThinkingFg: string;
+  readonly statusThinkingDotFg: string;
+  readonly statusSeparatorFg: string;
 
   // Message backgrounds & text
   readonly toolMsgBg: string;
@@ -131,6 +137,12 @@ export const theme: Theme = {
   statusIdleFg: fg(139, 148, 158),
   statusModelFg: fg(34, 211, 238),
   statusTokensFg: fg(139, 148, 158),
+  statusContextNormalFg: fg(139, 148, 158),
+  statusContextWarningFg: fg(234, 179, 8),
+  statusContextDangerFg: fg(239, 68, 68),
+  statusThinkingFg: fg(139, 148, 158),
+  statusThinkingDotFg: fg(34, 211, 238),
+  statusSeparatorFg: fg(61, 90, 110),
 
   // Message backgrounds & text
   toolMsgBg: bg(15, 20, 42),
