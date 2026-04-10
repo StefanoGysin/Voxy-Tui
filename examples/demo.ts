@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   tui.layout.messageList.updateLastMessage(codeText + '\nArquivo lido com sucesso ✓\n');
   tui.layout.statusBar.setMode('idle');
   tui.layout.statusBar.setStatus('Concluído');
-  tui.layout.statusBar.setTokens(512, 1247);
+  tui.layout.statusBar.setContextUsage(1247, 200000);
   tui.scheduleRender();
 
   await sleep(500);
