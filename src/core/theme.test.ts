@@ -20,7 +20,9 @@ describe('theme', () => {
     'scrollbarTrackFg', 'scrollbarTrackBg',
     'scrollbarSepFg',
     'toastModeBg', 'toastSuccessBg', 'toastWarningBg', 'toastErrorBg', 'toastInfoBg',
-    'statusStreamingFg', 'statusErrorFg', 'statusIdleFg', 'statusModelFg', 'statusTokensFg',
+    'statusStreamingFg', 'statusErrorFg', 'statusIdleFg', 'statusModelFg',
+    'statusContextNormalFg', 'statusContextWarningFg', 'statusContextDangerFg',
+    'statusThinkingFg', 'statusThinkingDotFg', 'statusSeparatorFg',
     'toolMsgBg', 'userMsgBg', 'assistantMsgBg', 'userTextFg', 'userTextStyle',
     'toolNameFg', 'toolRunningFg', 'toolDoneFg', 'toolErrorFg', 'toolLabelFg',
   ];
