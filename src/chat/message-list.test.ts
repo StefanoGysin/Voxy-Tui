@@ -175,8 +175,8 @@ describe('MessageList — tool messages', () => {
 
   test('tool expandido com input longo quebra em múltiplas linhas', () => {
     list.addToolMessage(
-      'tu1', 'task', '', [], 'done',
-      { prompt: 'a'.repeat(200) },
+      'tu1', 'Bash', '', [], 'done',
+      { command: 'a'.repeat(200) },
     );
     list.toggleLastTool();
     const lines = list.render(50, 20);
@@ -187,8 +187,8 @@ describe('MessageList — tool messages', () => {
 
   test('tool expandido com input multi-linha preserva todas as linhas', () => {
     list.addToolMessage(
-      'tu1', 'task', '', [], 'done',
-      { prompt: 'linha1\nlinha2\nlinha3' },
+      'tu1', 'Bash', '', [], 'done',
+      { command: 'linha1\nlinha2\nlinha3' },
     );
     list.toggleLastTool();
     const lines = list.render(80, 20);
@@ -209,6 +209,142 @@ describe('MessageList — tool messages', () => {
     expect(joined).toContain('file_path: /a.ts');
     const inputSection = joined.split('─')[0];
     expect(inputSection).not.toContain('↳');
+  });
+});
+
+describe('MessageList — Task tool HUD', () => {
+  let list: MessageList;
+
+  beforeEach(() => {
+    list = new MessageList();
+  });
+
+  function addTask(rawInput?: Record<string, unknown>): void {
+    list.addToolMessage(
+      'toolu_01abcdef12345',
+      'task',
+      '',
+      [],
+      'done',
+      rawInput,
+    );
+  }
+
+  function renderJoined(width: number): string {
+    const lines = list.render(width, 30);
+    return stripAnsi(lines.join('\n'));
+  }
+
+  test('Full HUD (width 100, expandido): header uppercase + badge ASYNC', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs deste repositório',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('EXPLORE AGENT');
+    expect(joined).toContain('ASYNC');
+  });
+
+  test('Full HUD (width 100): PROMPT PAYLOAD box com bordas', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs deste repositório',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('PROMPT PAYLOAD');
+    expect(joined).toContain('┌─');
+    expect(joined).toContain('└');
+  });
+
+  test('Reduced (width 70): header uppercase + badge mas SEM PROMPT PAYLOAD box', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs deste repositório',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(70);
+    expect(joined).toContain('ASYNC');
+    expect(joined).not.toContain('PROMPT PAYLOAD');
+    expect(joined).not.toContain('┌─');
+  });
+
+  test('Minimal (width 50): sem badges, sem uppercase, só accent + nome', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(50);
+    expect(joined).not.toContain('ASYNC');
+    expect(joined).not.toContain('EXPLORE AGENT');
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('Explorar pasta docs');
+  });
+
+  test('Text-only (width 30, expandido): 1 linha sem accent bar', () => {
+    addTask({
+      description: 'Explorar docs',
+      prompt: 'Explore',
+      subagent_type: 'Explore',
+    });
+    list.toggleLastTool();
+    const lines = list.render(30, 10);
+    const contentLines = lines.filter(l => stripAnsi(l).trim().length > 0 && !stripAnsi(l).match(/^─+$/));
+    const joined = stripAnsi(contentLines.join('\n'));
+    expect(joined).toContain('✓');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('Explorar');
+    expect(joined).not.toContain('┃');
+  });
+
+  test('Colapsado (width 80): contém badge ASYNC + description + hint', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    const joined = renderJoined(80);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('ASYNC');
+    expect(joined).toContain('Explorar pasta docs');
+    expect(joined).toContain('Ctrl+E');
+  });
+
+  test('Colapsado (width 50): sem badge ASYNC mas com description', () => {
+    addTask({
+      description: 'Explorar docs',
+      prompt: 'Explore',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    const joined = renderJoined(50);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('Ctrl+E');
+    expect(joined).not.toContain('ASYNC');
+  });
+
+  test('Task sem toolRawInput: não crasha, renderiza fallback', () => {
+    list.addToolMessage('toolu_01xyz', 'task', 'fallback description', [], 'done');
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('GENERAL-PURPOSE AGENT');
+    expect(joined).toContain('fallback description');
   });
 });
 
