@@ -25,6 +25,9 @@ describe('theme', () => {
     'statusThinkingFg', 'statusThinkingDotFg', 'statusSeparatorFg',
     'toolMsgBg', 'userMsgBg', 'assistantMsgBg', 'userTextFg', 'userTextStyle',
     'toolNameFg', 'toolRunningFg', 'toolDoneFg', 'toolErrorFg', 'toolLabelFg',
+    'agentAccentFg', 'agentPromptFg',
+    'agentCardHeaderBg', 'agentPromptBoxBg', 'agentCardFooterBg',
+    'badgeAsyncFg', 'badgeAsyncBg', 'badgeModelFg', 'badgeModelBg',
   ];
 
   it('exports all expected keys', () => {
