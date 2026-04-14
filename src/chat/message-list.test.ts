@@ -172,6 +172,44 @@ describe('MessageList — tool messages', () => {
     expect(msgs[0].toolCollapsed).toBe(true);
     expect(msgs[1].toolCollapsed).toBe(false);
   });
+
+  test('tool expandido com input longo quebra em múltiplas linhas', () => {
+    list.addToolMessage(
+      'tu1', 'task', '', [], 'done',
+      { prompt: 'a'.repeat(200) },
+    );
+    list.toggleLastTool();
+    const lines = list.render(50, 20);
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).toContain('↳');
+    expect(joined).toContain('aaa');
+  });
+
+  test('tool expandido com input multi-linha preserva todas as linhas', () => {
+    list.addToolMessage(
+      'tu1', 'task', '', [], 'done',
+      { prompt: 'linha1\nlinha2\nlinha3' },
+    );
+    list.toggleLastTool();
+    const lines = list.render(80, 20);
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).toContain('linha1');
+    expect(joined).toContain('linha2');
+    expect(joined).toContain('linha3');
+  });
+
+  test('tool expandido com input curto ainda em linha única', () => {
+    list.addToolMessage(
+      'tu1', 'read', '', [], 'done',
+      { file_path: '/a.ts' },
+    );
+    list.toggleLastTool();
+    const lines = list.render(80, 20);
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).toContain('file_path: /a.ts');
+    const inputSection = joined.split('─')[0];
+    expect(inputSection).not.toContain('↳');
+  });
 });
 
 describe('MessageList — scroll indicator', () => {

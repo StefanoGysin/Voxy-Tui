@@ -182,18 +182,37 @@ function renderToolMessage(msg: ChatMessage, width: number): { lines: string[], 
   if (raw) {
     for (const [key, value] of Object.entries(raw)) {
       const valStr = typeof value === 'string' ? value : JSON.stringify(value);
-      // Sanitizar tabs para consistência de largura
       const cleanVal = valStr.replace(/\t/g, '  ');
-      // Truncar valor longo em 1 linha
       const maxValWidth = Math.max(1, width - key.length - 4); // "  key: "
-      const truncated = stripAnsi(fitWidth(cleanVal.split('\n')[0], maxValWidth));
-      lines.push(fitWidth(`  ${theme.textDim}${key}: ${truncated}${RESET}`, width));
+
+      const valLines = cleanVal.split('\n').flatMap(line => wrapText(line, maxValWidth));
+      if (valLines.length === 0) valLines.push('');
+
+      lines.push(fitWidth(`  ${theme.textDim}${key}: ${valLines[0]}${RESET}`, width));
       bgs.push(theme.toolMsgBg);
+
+      for (let vi = 1; vi < valLines.length; vi++) {
+        lines.push(
+          fitWidth(`  ${theme.textDim}↳${RESET} ${theme.textDim}${valLines[vi]}${RESET}`, width),
+        );
+        bgs.push(theme.toolMsgBg);
+      }
     }
   } else if (msg.toolInput) {
     const cleanInput = (msg.toolInput ?? '').replace(/\t/g, '  ');
-    lines.push(fitWidth(`  ${theme.textDim}${cleanInput}${RESET}`, width));
+    const maxInputWidth = Math.max(1, width - 2);
+    const inputLines = cleanInput.split('\n').flatMap(line => wrapText(line, maxInputWidth));
+    if (inputLines.length === 0) inputLines.push('');
+
+    lines.push(fitWidth(`  ${theme.textDim}${inputLines[0]}${RESET}`, width));
     bgs.push(theme.toolMsgBg);
+
+    for (let ii = 1; ii < inputLines.length; ii++) {
+      lines.push(
+        fitWidth(`  ${theme.textDim}↳${RESET} ${theme.textDim}${inputLines[ii]}${RESET}`, width),
+      );
+      bgs.push(theme.toolMsgBg);
+    }
   }
 
   // Separador fino entre input e output
