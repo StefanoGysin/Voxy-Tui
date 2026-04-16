@@ -150,7 +150,6 @@ interface TaskParams {
   prompt: string;
   isAsync: boolean;
   model: string | null;
-  shortId: string;
   status: 'done' | 'error';
 }
 
@@ -162,9 +161,8 @@ function extractTaskParams(msg: ChatMessage): TaskParams {
   const agentType = subagent.charAt(0).toUpperCase() + subagent.slice(1);
   const isAsync = raw.run_in_background === true;
   const model = typeof raw.model_name === 'string' ? raw.model_name : null;
-  const shortId = msg.id ? msg.id.slice(-8) : '—';
   const status = msg.toolStatus ?? 'done';
-  return { agentType, description, prompt, isAsync, model, shortId, status };
+  return { agentType, description, prompt, isAsync, model, status };
 }
 
 function buildBadge(label: string, fgColor: string, bgColor: string): string {
@@ -271,14 +269,14 @@ function renderTaskHudFull(msg: ChatMessage, width: number): { lines: string[]; 
   lines.push(`${bar} ${theme.textMuted}${DIM}${'┄'.repeat(dashWidth)}${RESET}`);
   bgs.push(theme.agentCardFooterBg);
 
-  // footer line: id: XXX ... Ctrl+E recolher
+  // footer line: visible in sidebar · Tasks ... Ctrl+E recolher
   const hintText = 'Ctrl+E recolher';
-  const idText = `id: ${p.shortId}`;
-  const idAnsi = `${theme.textMuted}${DIM}${idText}${RESET}`;
+  const sidebarText = 'visible in sidebar · Tasks';
+  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
   const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
-  const footerOverhead = 1 + 1 + idText.length + 1 + hintText.length + 1; // accent + spaces + ids
+  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
   const footerGap = Math.max(1, width - footerOverhead);
-  lines.push(`${bar} ${idAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
+  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
   bgs.push(theme.agentCardFooterBg);
 
   return { lines, bgs };
@@ -329,12 +327,12 @@ function renderTaskHudReduced(msg: ChatMessage, width: number): { lines: string[
 
   // footer
   const hintText = 'Ctrl+E recolher';
-  const idText = `id: ${p.shortId}`;
-  const idAnsi = `${theme.textMuted}${DIM}${idText}${RESET}`;
+  const sidebarText = 'visible in sidebar · Tasks';
+  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
   const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
-  const footerOverhead = 1 + 1 + idText.length + 1 + hintText.length + 1;
+  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
   const footerGap = Math.max(1, width - footerOverhead);
-  lines.push(`${bar} ${idAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
+  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
   bgs.push(theme.toolMsgBg);
 
   return { lines, bgs };

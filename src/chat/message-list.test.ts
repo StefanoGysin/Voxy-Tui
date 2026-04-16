@@ -338,6 +338,30 @@ describe('MessageList — Task tool HUD', () => {
     expect(joined).not.toContain('ASYNC');
   });
 
+  test('Full HUD footer mostra "visible in sidebar · Tasks" em vez de ID', () => {
+    list.addToolMessage(
+      'toolu_01ABCDEFGH', 'task', '', [], 'done',
+      { description: 'Teste', prompt: 'p', subagent_type: 'Explore', run_in_background: true },
+    );
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('visible in sidebar · Tasks');
+    expect(joined).not.toContain('ABCDEFGH');
+    expect(joined).not.toContain('id: ');
+  });
+
+  test('Reduced HUD footer mostra "visible in sidebar · Tasks" em vez de ID', () => {
+    list.addToolMessage(
+      'toolu_01ABCDEFGH', 'task', '', [], 'done',
+      { description: 'Teste', prompt: 'p', subagent_type: 'Explore', run_in_background: true },
+    );
+    list.toggleLastTool();
+    const joined = renderJoined(70);
+    expect(joined).toContain('visible in sidebar · Tasks');
+    expect(joined).not.toContain('ABCDEFGH');
+    expect(joined).not.toContain('id: ');
+  });
+
   test('Task sem toolRawInput: não crasha, renderiza fallback', () => {
     list.addToolMessage('toolu_01xyz', 'task', 'fallback description', [], 'done');
     list.toggleLastTool();
