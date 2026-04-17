@@ -225,6 +225,31 @@ describe('ChatLayout — handleMouse', () => {
     const result = layout.handleMouseDrag({ x: 5, y: 30, button: 0 });
     expect(result).toBe(false);
   });
+
+  test('click na StatusBar com tasks ativas delega ao statusBar.handleMouse', () => {
+    layout = new ChatLayout();
+    layout.statusBar.setTasks(2, false);
+    let clicked = false;
+    layout.statusBar.onTaskIndicatorClick = () => { clicked = true; };
+    layout.render(80, 30);
+    // statusBar Y = (layout as any).lastStatusStartY — calculado no render
+    const statusY = (layout as any).lastStatusStartY as number;
+    expect(statusY).toBeGreaterThan(0);
+    const result = layout.handleMouse({ x: 5, y: statusY, button: 0, isRelease: false });
+    expect(result).toBe(true);
+    expect(clicked).toBe(true);
+  });
+
+  test('click na StatusBar sem tasks ativas cai no fallback (foca input)', () => {
+    layout = new ChatLayout();
+    let clicked = false;
+    layout.statusBar.onTaskIndicatorClick = () => { clicked = true; };
+    layout.render(80, 30);
+    const statusY = (layout as any).lastStatusStartY as number;
+    const result = layout.handleMouse({ x: 5, y: statusY, button: 0, isRelease: false });
+    expect(result).toBe(true);
+    expect(clicked).toBe(false);
+  });
 });
 
 describe('ChatLayout — toast', () => {

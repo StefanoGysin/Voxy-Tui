@@ -98,4 +98,66 @@ describe('StatusBar', () => {
     expect(line).toContain('gpt-5.2');
     expect(line).not.toContain('/');
   });
+
+  test('setTasks(2, false) mostra "● 2 tasks"', () => {
+    bar = new StatusBar();
+    bar.setTasks(2, false);
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).toContain('● 2 tasks');
+  });
+
+  test('setTasks(1, false) mostra "● 1 task" (singular)', () => {
+    bar = new StatusBar();
+    bar.setTasks(1, false);
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).toContain('● 1 task');
+    expect(line).not.toContain('tasks');
+  });
+
+  test('setTasks(0, false) NÃO mostra indicador', () => {
+    bar = new StatusBar();
+    bar.setModel('gpt-5.2');
+    bar.setTasks(0, false);
+    const line = stripAnsi(bar.render(80, 1)[0]);
+    expect(line).not.toContain('●');
+  });
+
+  test('setTasks(3, true) renderiza com warning (substring smoke test)', () => {
+    bar = new StatusBar();
+    bar.setTasks(3, true);
+    const line = bar.render(80, 1)[0];
+    const stripped = stripAnsi(line);
+    expect(stripped).toContain('● 3 tasks');
+    // Smoke test: cor warning (234;179;8) presente no ANSI raw
+    expect(line).toContain('234;179;8');
+  });
+
+  test('handleMouse com taskRunning > 0 dispara onTaskIndicatorClick', () => {
+    bar = new StatusBar();
+    bar.setTasks(2, false);
+    let clicked = false;
+    bar.onTaskIndicatorClick = () => { clicked = true; };
+    const consumed = bar.handleMouse({ x: 10, y: 1, button: 0, isRelease: false });
+    expect(consumed).toBe(true);
+    expect(clicked).toBe(true);
+  });
+
+  test('handleMouse com taskRunning === 0 retorna false sem chamar callback', () => {
+    bar = new StatusBar();
+    let clicked = false;
+    bar.onTaskIndicatorClick = () => { clicked = true; };
+    const consumed = bar.handleMouse({ x: 10, y: 1, button: 0, isRelease: false });
+    expect(consumed).toBe(false);
+    expect(clicked).toBe(false);
+  });
+
+  test('handleMouse ignora eventos de release', () => {
+    bar = new StatusBar();
+    bar.setTasks(1, false);
+    let clicked = false;
+    bar.onTaskIndicatorClick = () => { clicked = true; };
+    const consumed = bar.handleMouse({ x: 10, y: 1, button: 0, isRelease: true });
+    expect(consumed).toBe(false);
+    expect(clicked).toBe(false);
+  });
 });

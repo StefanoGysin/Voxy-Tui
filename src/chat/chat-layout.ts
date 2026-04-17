@@ -46,6 +46,7 @@ export class ChatLayout implements Component {
   private lastSidebarWidth = 0;
   private lastPermStartY = 0;
   private lastPermHeight = 0;
+  private lastStatusStartY = 0;
 
   constructor() {
     this.messageList = new MessageList();
@@ -150,6 +151,7 @@ export class ChatLayout implements Component {
       this.lastMessagesHeight = 0;
       this.lastPermStartY = 0;
       this.lastPermHeight = 0;
+      this.lastStatusStartY = 0;
       const sidebarLines = this.sidebarComponent.render(sidebarWidth, height);
       const result: string[] = [];
       for (let i = 0; i < height; i++) {
@@ -169,6 +171,7 @@ export class ChatLayout implements Component {
     this.lastMessagesHeight = messagesHeight;
     this.lastPermStartY = messagesHeight + activityHeight + toastHeight + 1;
     this.lastPermHeight = permHeight;
+    this.lastStatusStartY = messagesHeight + activityHeight + toastHeight + permHeight + 1;
 
     const messageLines = this.messageList.render(chatWidth, messagesHeight);
     const activityLines = activityHeight > 0
@@ -238,6 +241,13 @@ export class ChatLayout implements Component {
           y: event.y - this.lastPermStartY,
         };
         return this.permissionSlot.handleMouse(localEvent);
+      }
+    }
+
+    // Click na StatusBar → delegar (abre tasks se indicador ativo)
+    if (this.lastStatusStartY > 0 && event.y === this.lastStatusStartY) {
+      if (this.statusBar.handleMouse(event)) {
+        return true;
       }
     }
 

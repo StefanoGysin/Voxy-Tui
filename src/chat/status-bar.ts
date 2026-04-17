@@ -1,4 +1,4 @@
-import type { Component } from '../core/component';
+import type { Component, MouseClickEvent } from '../core/component';
 import { RESET } from '../core/ansi';
 import { theme } from '../core/theme';
 import { BRAILLE_FRAMES, FRAME_INTERVAL_MS } from '../components/spinner';
@@ -22,10 +22,13 @@ export class StatusBar implements Component {
   private contextUsed = 0;
   private contextTotal = 0;
   private thinkingLevel: ThinkingLevel = 'off';
+  private taskRunning = 0;
+  private taskHasError = false;
   private frameIndex = 0;
   private timer?: ReturnType<typeof setInterval>;
 
   onUpdate?: () => void;
+  onTaskIndicatorClick?: () => void;
 
   setMode(mode: StatusMode): void {
     this.mode = mode;
@@ -51,6 +54,18 @@ export class StatusBar implements Component {
 
   setThinking(level: ThinkingLevel): void {
     this.thinkingLevel = level;
+  }
+
+  setTasks(running: number, hasError: boolean): void {
+    this.taskRunning = running;
+    this.taskHasError = hasError;
+  }
+
+  handleMouse(event: MouseClickEvent): boolean {
+    if (event.isRelease) return false;
+    if (this.taskRunning <= 0) return false;
+    this.onTaskIndicatorClick?.();
+    return true;
   }
 
   dispose(): void {
@@ -97,8 +112,16 @@ export class StatusBar implements Component {
       right = `${theme.statusThinkingFg}Thinking${RESET} [${theme.statusThinkingDotFg}● ${this.thinkingLevel}${RESET}]`;
     }
 
+    // Task indicator — só aparece quando há tasks em execução
+    let tasks = '';
+    if (this.taskRunning > 0) {
+      const taskFg = this.taskHasError ? theme.warningFg : theme.successFg;
+      const label = this.taskRunning === 1 ? '1 task' : `${this.taskRunning} tasks`;
+      tasks = `${taskFg}● ${label}${RESET}`;
+    }
+
     // Join non-empty sections with separator
-    const rightParts = [center, right].filter(Boolean);
+    const rightParts = [center, tasks, right].filter(Boolean);
     const rightSide = rightParts.join(sep);
 
     const leftWidth = measureWidth(stripAnsi(left));
