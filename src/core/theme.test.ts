@@ -28,6 +28,7 @@ describe('theme', () => {
     'agentAccentFg', 'agentPromptFg',
     'agentCardHeaderBg', 'agentPromptBoxBg', 'agentCardFooterBg',
     'badgeAsyncFg', 'badgeAsyncBg', 'badgeModelFg', 'badgeModelBg',
+    'badgeCompletedBg', 'badgeFailedBg',
   ];
 
   it('exports all expected keys', () => {

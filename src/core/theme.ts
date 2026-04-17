@@ -74,6 +74,8 @@ export interface Theme {
   readonly badgeAsyncBg: string;
   readonly badgeModelFg: string;
   readonly badgeModelBg: string;
+  readonly badgeCompletedBg: string;
+  readonly badgeFailedBg: string;
 }
 
 export const theme: Theme = {
@@ -177,6 +179,8 @@ export const theme: Theme = {
   badgeAsyncBg: bg(15, 31, 53),
   badgeModelFg: fg(229, 192, 123),
   badgeModelBg: bg(30, 26, 15),
+  badgeCompletedBg: bg(10, 32, 24),
+  badgeFailedBg: bg(42, 18, 21),
 };
 
 /** Caractere visual para borda de item selecionado (não é sequência ANSI). */

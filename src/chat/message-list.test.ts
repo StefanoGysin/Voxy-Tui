@@ -372,6 +372,123 @@ describe('MessageList — Task tool HUD', () => {
   });
 });
 
+describe('MessageList — TaskOutput tool HUD', () => {
+  let list: MessageList;
+
+  beforeEach(() => {
+    list = new MessageList();
+  });
+
+  const successOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Explorar docs',
+    'Status: completed',
+    'Duration: 22656ms',
+    '',
+    'Result:',
+    '## Índice (técnico)',
+    '- docs/llm/INDEX.md — mapa da documentação',
+    '- docs/user/commands/README.md — lista de comandos',
+  ];
+
+  const errorOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Buscar arquivos',
+    'Status: failed',
+    'Duration: 5000ms',
+    '',
+    'Errors:',
+    'Permission denied',
+    'Cannot access /restricted',
+  ];
+
+  function addTaskOutput(output: string[], status: 'done' | 'error' = 'done'): void {
+    list.addToolMessage(
+      'toolu_01ABC',
+      'TaskOutput',
+      'task_id: "3321de5f"',
+      output,
+      status,
+      { task_id: '3321de5f', block: true },
+    );
+  }
+
+  function renderJoined(width: number, height = 30): string {
+    return stripAnsi(list.render(width, height).join('\n'));
+  }
+
+  test('Full HUD (width 100, expandido): EXPLORE AGENT + COMPLETED + RESULT + duration', () => {
+    addTaskOutput(successOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('EXPLORE AGENT');
+    expect(joined).toContain('COMPLETED');
+    expect(joined).toContain('RESULT');
+    expect(joined).toContain('22.7S'); // buildBadge uppercases all labels
+    expect(joined).toContain('Explorar docs');
+    expect(joined).toContain('Índice');
+  });
+
+  test('Full HUD com erro: FAILED + ERRORS + accent bar vermelha (dangerFg)', () => {
+    addTaskOutput(errorOutput, 'error');
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('FAILED');
+    expect(joined).toContain('ERRORS');
+    expect(joined).toContain('Permission denied');
+    expect(joined).not.toContain('COMPLETED');
+    // Accent bar deve usar dangerFg
+    const rawLines = list.render(100, 30).join('\n');
+    expect(rawLines).toContain(theme.dangerFg + BOLD + '┃');
+  });
+
+  test('Reduced (width 70, expandido): badges mas SEM box RESULT', () => {
+    addTaskOutput(successOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(70);
+    expect(joined).toContain('COMPLETED');
+    expect(joined).toContain('22.7S'); // buildBadge uppercases all labels
+    expect(joined).not.toContain('┌─');
+    expect(joined).not.toContain(' RESULT ');
+  });
+
+  test('Colapsado (width 80): agent + COMPLETED + description + hint', () => {
+    addTaskOutput(successOutput);
+    const joined = renderJoined(80);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('COMPLETED');
+    expect(joined).toContain('Explorar docs');
+    expect(joined).toContain('Ctrl+E');
+  });
+
+  test('Fallback: output sem Agent: line → render genérico (sem HUD)', () => {
+    addTaskOutput([
+      'Task ID: xxx',
+      'Type: shell',
+      'Status: completed',
+    ]);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).not.toContain('EXPLORE AGENT');
+    expect(joined).not.toContain('COMPLETED ');
+    expect(joined).toContain('TaskOutput');
+  });
+
+  test('Fallback: TaskOutput sem output → render genérico', () => {
+    list.addToolMessage('tu1', 'TaskOutput', 'x', [], 'done', { task_id: 'x' });
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).not.toContain('EXPLORE AGENT');
+    expect(joined).toContain('TaskOutput');
+  });
+});
+
 describe('MessageList — scroll indicator', () => {
   function makeMany(list: MessageList, n: number): void {
     for (let i = 0; i < n; i++) {

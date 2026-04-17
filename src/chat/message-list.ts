@@ -30,6 +30,11 @@ const TASK_HUD_FULL_MIN_WIDTH = 80;
 const TASK_HUD_REDUCED_MIN_WIDTH = 60;
 const TASK_HUD_MINIMAL_MIN_WIDTH = 40;
 
+// TaskOutput HUD: trunca resultados longos pra evitar explodir a viewport.
+// Valor mais generoso que o Task tool (que mostra prompt inteiro) porque
+// resultados de agents tendem a ser longos. Conteúdo completo fica no sidebar.
+const MAX_TASK_OUTPUT_RESULT_LINES = 10;
+
 /** Retorna o caractere ANSI colorido de borda esquerda para a role dada. */
 function getMsgBorderAnsi(role: ChatMessage['role']): string {
   switch (role) {
@@ -397,7 +402,339 @@ function renderTaskToolMessage(msg: ChatMessage, width: number): { lines: string
   return renderTaskTextOnly(msg, width);
 }
 
+// ============================================================================
+// TaskOutput tool HUD — espelha o Task tool HUD, mas mostra resultado do agent
+// em vez de prompt. Badges, accent bar e box label mudam por estado (success/error).
+// ============================================================================
+
+interface TaskOutputMeta {
+  agentType: string;
+  description: string;
+  status: string;
+  durationMs: number;
+  resultText: string;
+  errorsText: string;
+  isError: boolean;
+}
+
+function extractTaskOutputMeta(msg: ChatMessage): TaskOutputMeta | null {
+  const output = msg.toolOutput ?? [];
+  if (output.length === 0) return null;
+
+  let agentType = '';
+  let description = '';
+  let status = '';
+  let durationMs = 0;
+  let resultStart = -1;
+  let errorsStart = -1;
+
+  for (let i = 0; i < output.length; i++) {
+    const line = output[i];
+    if (line.startsWith('Agent: ')) {
+      agentType = line.slice(7).trim();
+    } else if (line.startsWith('Description: ')) {
+      description = line.slice(13).trim();
+    } else if (line.startsWith('Status: ')) {
+      status = line.slice(8).trim();
+    } else if (line.startsWith('Duration: ')) {
+      const match = line.match(/Duration: (\d+)ms/);
+      if (match) durationMs = parseInt(match[1], 10);
+    } else if (line === 'Result:') {
+      resultStart = i + 1;
+    } else if (line === 'Errors:') {
+      errorsStart = i + 1;
+    }
+  }
+
+  // Agent: é o marcador obrigatório — sem ele não é um TaskOutput de agent
+  if (!agentType) return null;
+
+  let resultText = '';
+  let errorsText = '';
+
+  if (resultStart >= 0) {
+    const end = errorsStart >= 0 && errorsStart > resultStart ? errorsStart - 1 : output.length;
+    resultText = output.slice(resultStart, end).join('\n').trim();
+  }
+  if (errorsStart >= 0) {
+    errorsText = output.slice(errorsStart).join('\n').trim();
+  }
+
+  const isError =
+    msg.toolStatus === 'error' ||
+    status.toLowerCase() === 'failed' ||
+    status.toLowerCase() === 'error' ||
+    errorsText.length > 0;
+
+  return {
+    agentType: agentType.charAt(0).toUpperCase() + agentType.slice(1),
+    description,
+    status,
+    durationMs,
+    resultText,
+    errorsText,
+    isError,
+  };
+}
+
+function formatDurationSec(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function buildTaskOutputBadges(meta: TaskOutputMeta): string {
+  const statusBadge = meta.isError
+    ? buildBadge('FAILED', theme.dangerFg, theme.badgeFailedBg)
+    : buildBadge('COMPLETED', theme.successFg, theme.badgeCompletedBg);
+  const badges = [statusBadge];
+  if (meta.durationMs > 0) {
+    badges.push(buildBadge(formatDurationSec(meta.durationMs), theme.badgeModelFg, theme.badgeModelBg));
+  }
+  return badges.join(' ');
+}
+
+function renderTaskOutputCollapsed(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+  const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
+  const hintText = 'Ctrl+E expandir';
+  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
+  const agentMark = `${theme.agentAccentFg}✦${RESET} ${theme.agentAccentFg}${BOLD}${meta.agentType}${RESET}`;
+  const agentVisual = measureWidth(`✦ ${meta.agentType}`);
+
+  const showBadge = width >= TASK_HUD_REDUCED_MIN_WIDTH;
+  const badgeLabel = meta.isError ? ' FAILED ' : ' COMPLETED ';
+  const badgeStr = showBadge
+    ? (meta.isError
+        ? buildBadge('FAILED', theme.dangerFg, theme.badgeFailedBg)
+        : buildBadge('COMPLETED', theme.successFg, theme.badgeCompletedBg))
+    : '';
+  const badgeVisual = showBadge ? measureWidth(badgeLabel) : 0;
+
+  const overhead = 1 + 1 + agentVisual + 1 + (showBadge ? badgeVisual + 1 : 0) + 1 + hintText.length + 1;
+  const descMax = Math.max(1, width - overhead);
+  const descTruncated = fitWidth(meta.description, descMax);
+
+  const leftBadgePart = showBadge ? ` ${badgeStr}` : '';
+  const leftPart = `${icon} ${agentMark}${leftBadgePart} ${theme.textDim}${descTruncated}${RESET}`;
+  const line = padEndAnsi(leftPart, width - hintText.length) + hintAnsi;
+  return { lines: [line], bgs: [theme.toolMsgBg] };
+}
+
+function renderTaskOutputHudFull(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+  const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
+  const accentColor = meta.isError ? theme.dangerFg : theme.agentAccentFg;
+  const bar = `${accentColor}${BOLD}┃${RESET}`;
+  const lines: string[] = [];
+  const bgs: (string | null)[] = [];
+
+  const badgesStr = buildTaskOutputBadges(meta);
+  const badgesVisual = measureWidth(stripAnsi(badgesStr));
+
+  // ---- Line 1: header (agentCardHeaderBg) ----
+  const headerName = `${theme.agentAccentFg}✦${RESET}${theme.agentCardHeaderBg} ${theme.agentAccentFg}${BOLD}${meta.agentType.toUpperCase()} AGENT${RESET}${theme.agentCardHeaderBg}`;
+  const headerLeft = `${theme.agentCardHeaderBg} ${icon}${theme.agentCardHeaderBg} ${headerName}`;
+  const leftVisual = 1 + 1 + 1 + 1 + 2 + measureWidth(`${meta.agentType.toUpperCase()} AGENT`);
+  const gapSize = Math.max(1, width - 1 - leftVisual - badgesVisual - 1);
+  lines.push(`${bar}${headerLeft}${' '.repeat(gapSize)}${badgesStr}${theme.agentCardHeaderBg} ${RESET}`);
+  bgs.push(theme.agentCardHeaderBg);
+
+  // ---- Line 2: description ----
+  const descMax = Math.max(1, width - 4);
+  lines.push(`${bar}   ${theme.titleFg}${BOLD}${fitWidth(meta.description, descMax)}${RESET}`);
+  bgs.push(theme.toolMsgBg);
+
+  // ---- Box: RESULT / ERRORS ----
+  const boxText = meta.isError ? meta.errorsText : meta.resultText;
+  if (boxText) {
+    const boxWidth = Math.max(10, width - 4);
+    const label = meta.isError ? ' ERRORS ' : ' RESULT ';
+    const innerTopDashes = Math.max(0, boxWidth - 2 - label.length - 1);
+    const topBorder = `┌─${label}${'─'.repeat(innerTopDashes)}┐`;
+    lines.push(`${bar}   ${theme.textDim}${topBorder}${RESET}`);
+    bgs.push(theme.toolMsgBg);
+
+    const contentWidth = Math.max(1, boxWidth - 4);
+    const allLines = boxText.split('\n').flatMap(l => wrapText(l, contentWidth));
+    const truncated = allLines.length > MAX_TASK_OUTPUT_RESULT_LINES;
+    const displayLines = truncated ? allLines.slice(0, MAX_TASK_OUTPUT_RESULT_LINES) : allLines;
+    const contentFg = meta.isError ? theme.dangerFg : theme.agentPromptFg;
+
+    for (const pLine of displayLines) {
+      const visual = measureWidth(stripAnsi(pLine));
+      const pad = Math.max(0, contentWidth - visual);
+      const inner = `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${contentFg}${pLine}${RESET}${theme.agentPromptBoxBg}${' '.repeat(pad)} ${theme.textDim}│${RESET}`;
+      lines.push(`${bar}   ${inner}`);
+      bgs.push(theme.agentPromptBoxBg);
+    }
+
+    if (truncated) {
+      const remaining = allLines.length - MAX_TASK_OUTPUT_RESULT_LINES;
+      const truncLabel = `[+${remaining} linhas]`;
+      const visual = measureWidth(truncLabel);
+      const pad = Math.max(0, contentWidth - visual);
+      const inner = `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${theme.textMuted}${DIM}${truncLabel}${RESET}${theme.agentPromptBoxBg}${' '.repeat(pad)} ${theme.textDim}│${RESET}`;
+      lines.push(`${bar}   ${inner}`);
+      bgs.push(theme.agentPromptBoxBg);
+    }
+
+    const bottomBorder = `└${'─'.repeat(boxWidth - 2)}┘`;
+    lines.push(`${bar}   ${theme.textDim}${bottomBorder}${RESET}`);
+    bgs.push(theme.toolMsgBg);
+  }
+
+  // ---- Footer ----
+  const dashWidth = Math.max(0, width - 2);
+  lines.push(`${bar} ${theme.textMuted}${DIM}${'┄'.repeat(dashWidth)}${RESET}`);
+  bgs.push(theme.agentCardFooterBg);
+
+  const hintText = 'Ctrl+E recolher';
+  const sidebarText = 'visible in sidebar · Tasks';
+  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
+  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
+  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
+  const footerGap = Math.max(1, width - footerOverhead);
+  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
+  bgs.push(theme.agentCardFooterBg);
+
+  return { lines, bgs };
+}
+
+function renderTaskOutputHudReduced(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+  const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
+  const accentColor = meta.isError ? theme.dangerFg : theme.agentAccentFg;
+  const bar = `${accentColor}${BOLD}┃${RESET}`;
+  const lines: string[] = [];
+  const bgs: (string | null)[] = [];
+
+  const badgesStr = buildTaskOutputBadges(meta);
+  const badgesVisual = measureWidth(stripAnsi(badgesStr));
+
+  // Header
+  const headerLeft = ` ${icon} ${theme.agentAccentFg}✦${RESET} ${theme.agentAccentFg}${BOLD}${meta.agentType.toUpperCase()} AGENT${RESET}`;
+  const leftVisual = measureWidth(stripAnsi(headerLeft));
+  const gapSize = Math.max(1, width - 1 - leftVisual - badgesVisual - 1);
+  lines.push(`${bar}${headerLeft}${' '.repeat(gapSize)}${badgesStr} `);
+  bgs.push(theme.toolMsgBg);
+
+  // Description
+  const descMax = Math.max(1, width - 4);
+  lines.push(`${bar}   ${theme.titleFg}${BOLD}${fitWidth(meta.description, descMax)}${RESET}`);
+  bgs.push(theme.toolMsgBg);
+
+  // Result/errors prose
+  const boxText = meta.isError ? meta.errorsText : meta.resultText;
+  if (boxText) {
+    lines.push(`${bar}`);
+    bgs.push(theme.toolMsgBg);
+
+    const contentWidth = Math.max(1, width - 5);
+    const allLines = boxText.split('\n').flatMap(l => wrapText(l, contentWidth));
+    const truncated = allLines.length > MAX_TASK_OUTPUT_RESULT_LINES;
+    const displayLines = truncated ? allLines.slice(0, MAX_TASK_OUTPUT_RESULT_LINES) : allLines;
+    const contentFg = meta.isError ? theme.dangerFg : theme.agentPromptFg;
+
+    for (const pLine of displayLines) {
+      lines.push(`${bar}   ${contentFg}${pLine}${RESET}`);
+      bgs.push(theme.toolMsgBg);
+    }
+
+    if (truncated) {
+      const remaining = allLines.length - MAX_TASK_OUTPUT_RESULT_LINES;
+      lines.push(`${bar}   ${theme.textMuted}${DIM}[+${remaining} linhas]${RESET}`);
+      bgs.push(theme.toolMsgBg);
+    }
+
+    lines.push(`${bar}`);
+    bgs.push(theme.toolMsgBg);
+  }
+
+  // Footer
+  const hintText = 'Ctrl+E recolher';
+  const sidebarText = 'visible in sidebar · Tasks';
+  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
+  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
+  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
+  const footerGap = Math.max(1, width - footerOverhead);
+  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
+  bgs.push(theme.toolMsgBg);
+
+  return { lines, bgs };
+}
+
+function renderTaskOutputHudMinimal(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+  const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
+  const accentColor = meta.isError ? theme.dangerFg : theme.agentAccentFg;
+  const bar = `${accentColor}${BOLD}┃${RESET}`;
+  const lines: string[] = [];
+  const bgs: (string | null)[] = [];
+
+  lines.push(`${bar} ${icon} ${theme.agentAccentFg}✦${RESET} ${theme.agentAccentFg}${BOLD}${meta.agentType}${RESET}`);
+  bgs.push(theme.toolMsgBg);
+
+  const descMax = Math.max(1, width - 4);
+  lines.push(`${bar}   ${theme.titleFg}${BOLD}${fitWidth(meta.description, descMax)}${RESET}`);
+  bgs.push(theme.toolMsgBg);
+
+  const boxText = meta.isError ? meta.errorsText : meta.resultText;
+  if (boxText) {
+    lines.push(`${bar}`);
+    bgs.push(theme.toolMsgBg);
+
+    const contentWidth = Math.max(1, width - 5);
+    const allLines = boxText.split('\n').flatMap(l => wrapText(l, contentWidth));
+    const truncated = allLines.length > MAX_TASK_OUTPUT_RESULT_LINES;
+    const displayLines = truncated ? allLines.slice(0, MAX_TASK_OUTPUT_RESULT_LINES) : allLines;
+    const contentFg = meta.isError ? theme.dangerFg : theme.agentPromptFg;
+
+    for (const pLine of displayLines) {
+      lines.push(`${bar}   ${contentFg}${pLine}${RESET}`);
+      bgs.push(theme.toolMsgBg);
+    }
+
+    if (truncated) {
+      const remaining = allLines.length - MAX_TASK_OUTPUT_RESULT_LINES;
+      lines.push(`${bar}   ${theme.textMuted}${DIM}[+${remaining} linhas]${RESET}`);
+      bgs.push(theme.toolMsgBg);
+    }
+
+    lines.push(`${bar}`);
+    bgs.push(theme.toolMsgBg);
+  }
+
+  const hintText = 'Ctrl+E recolher';
+  lines.push(`${bar}   ${theme.textMuted}${DIM}${hintText}${RESET}`);
+  bgs.push(theme.toolMsgBg);
+
+  return { lines, bgs };
+}
+
+function renderTaskOutputTextOnly(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+  const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
+  const statusText = meta.isError ? 'failed' : 'completed';
+  const prefix = `${icon} ${theme.agentAccentFg}${BOLD}${meta.agentType}${RESET}${theme.textDim}: ${RESET}`;
+  const prefixVisual = 2 + measureWidth(meta.agentType) + 2;
+  const descMax = Math.max(1, width - prefixVisual);
+  const line = `${prefix}${theme.textDim}${fitWidth(statusText, descMax)}${RESET}`;
+  return { lines: [line], bgs: [null] };
+}
+
+function renderTaskOutputToolMessage(msg: ChatMessage, width: number): { lines: string[]; bgs: (string | null)[] } | null {
+  const meta = extractTaskOutputMeta(msg);
+  if (!meta) return null;
+
+  const collapsed = msg.toolCollapsed !== false;
+  if (collapsed) return renderTaskOutputCollapsed(msg, meta, width);
+  if (width >= TASK_HUD_FULL_MIN_WIDTH) return renderTaskOutputHudFull(msg, meta, width);
+  if (width >= TASK_HUD_REDUCED_MIN_WIDTH) return renderTaskOutputHudReduced(msg, meta, width);
+  if (width >= TASK_HUD_MINIMAL_MIN_WIDTH) return renderTaskOutputHudMinimal(msg, meta, width);
+  return renderTaskOutputTextOnly(msg, meta, width);
+}
+
 function renderToolMessage(msg: ChatMessage, width: number): { lines: string[], bgs: (string | null)[] } {
+  // TaskOutput tool: HUD dedicado com parse defensivo.
+  // Se o output não tem o formato esperado (ex: task type != agent), cai no render genérico.
+  if ((msg.toolName ?? '').toLowerCase() === 'taskoutput') {
+    const result = renderTaskOutputToolMessage(msg, width);
+    if (result) return result;
+  }
   // Task tool: visual dedicado (HUD com degradação por width)
   if ((msg.toolName ?? '').toLowerCase() === 'task') {
     return renderTaskToolMessage(msg, width);
