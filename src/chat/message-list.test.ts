@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { MessageList } from './message-list';
+import { MessageList, extractTaskOutputMeta, parseDurationToMs } from './message-list';
 import type { ChatMessage } from './types';
 import { stripAnsi } from '../utils/strip-ansi';
 import { BOLD, FG_CYAN, RESET } from '../core/ansi';
@@ -486,6 +486,223 @@ describe('MessageList — TaskOutput tool HUD', () => {
     const joined = renderJoined(100);
     expect(joined).not.toContain('EXPLORE AGENT');
     expect(joined).toContain('TaskOutput');
+  });
+
+  // ========================================================================
+  // Ampliação: Tools used / Project / Turns blocks (formatos novos do voxy-cli)
+  // ========================================================================
+
+  const successOutputEnriched = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Contar .ts em tasks',
+    'Status: completed',
+    'Duration: 3879ms',
+    'Tools used: Glob, Read',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    '5',
+    '/tasks/index.ts',
+  ];
+
+  const multiTurnOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Contar .ts em tasks',
+    'Status: completed',
+    'Duration: 3879ms',
+    'Tools used: Bash',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    'output do turn final',
+    '',
+    'Turns: 3  (use turnIndex to inspect a specific turn)',
+    '  [0] sync · completed · 14.3s · tools: Read, Glob',
+    '  [1] background · completed · 250ms · tools: -',
+    '  [2] sync · completed · 3.9s · tools: Glob',
+  ];
+
+  const eightTurnsOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Task longa',
+    'Status: completed',
+    'Duration: 40000ms',
+    'Tools used: Bash',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    'final',
+    '',
+    'Turns: 8',
+    '  [0] sync · completed · 14.3s · tools: Read',
+    '  [1] sync · completed · 5.1s · tools: Read',
+    '  [2] sync · completed · 3.9s · tools: Glob',
+    '  [3] sync · completed · 2.1s · tools: Bash',
+    '  [4] sync · completed · 3.9s · tools: Glob',
+    '  [5] sync · completed · 1.0s · tools: Bash',
+    '  [6] sync · completed · 1.0s · tools: Bash',
+    '  [7] sync · completed · 1.0s · tools: Bash',
+  ];
+
+  const turnIndexOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: turno específico',
+    'Turn 1:',
+    'Status: completed',
+    'Duration: 5100ms',
+    'Tools used: Bash',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    'algum output do turno 1',
+  ];
+
+  function msgWith(output: string[]): ChatMessage {
+    return {
+      id: 'x',
+      role: 'tool',
+      content: '',
+      timestamp: new Date('2025-01-01T10:00:00'),
+      toolName: 'TaskOutput',
+      toolInput: 'x',
+      toolOutput: output,
+      toolStatus: 'done',
+    };
+  }
+
+  test('extractTaskOutputMeta parseia "Tools used: A, B"', () => {
+    const meta = extractTaskOutputMeta(msgWith(successOutputEnriched));
+    expect(meta?.toolsUsed).toEqual(['Glob', 'Read']);
+  });
+
+  test('extractTaskOutputMeta parseia "Project: name"', () => {
+    const meta = extractTaskOutputMeta(msgWith(successOutputEnriched));
+    expect(meta?.projectName).toBe('voxy-cli');
+  });
+
+  test('extractTaskOutputMeta: ausência de "Tools used" → toolsUsed === []', () => {
+    const meta = extractTaskOutputMeta(msgWith(successOutput));
+    expect(meta?.toolsUsed).toEqual([]);
+    expect(meta?.projectName).toBe('');
+  });
+
+  test('extractTaskOutputMeta parseia "Turn N:" como turnIndex', () => {
+    const meta = extractTaskOutputMeta(msgWith(turnIndexOutput));
+    expect(meta?.turnIndex).toBe(1);
+  });
+
+  test('extractTaskOutputMeta parseia bloco Turns multi-linha', () => {
+    const meta = extractTaskOutputMeta(msgWith(multiTurnOutput));
+    expect(meta?.turns).toBeDefined();
+    expect(meta?.turns?.length).toBe(3);
+    expect(meta?.turns?.[0].index).toBe(0);
+    expect(meta?.turns?.[0].status).toBe('completed');
+    expect(meta?.turns?.[0].durationMs).toBe(14300);
+    expect(meta?.turns?.[0].toolsUsed).toEqual(['Read', 'Glob']);
+  });
+
+  test('extractTaskOutputMeta trata "tools: -" como toolsUsed=[]', () => {
+    const meta = extractTaskOutputMeta(msgWith(multiTurnOutput));
+    expect(meta?.turns?.[1].toolsUsed).toEqual([]);
+  });
+
+  test('extractTaskOutputMeta parseia duração "250ms" em turn line', () => {
+    const meta = extractTaskOutputMeta(msgWith(multiTurnOutput));
+    expect(meta?.turns?.[1].durationMs).toBe(250);
+  });
+
+  test('Full HUD single-turn com tools mostra linha "Tools: ... · Project: ..."', () => {
+    addTaskOutput(successOutputEnriched);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('Tools: Glob, Read');
+    expect(joined).toContain('Project: voxy-cli');
+  });
+
+  test('Full HUD single-turn SEM tools/project (legado) não adiciona linha metadata', () => {
+    addTaskOutput(successOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('COMPLETED');
+    expect(joined).not.toContain('Tools:');
+    expect(joined).not.toContain('Project:');
+  });
+
+  test('Full HUD multi-turn mostra badge [3 TURNS] + box TURNS (3)', () => {
+    addTaskOutput(multiTurnOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('3 TURNS');
+    expect(joined).toContain('TURNS (3)');
+    expect(joined).toContain('[0] completed');
+    expect(joined).toContain('[1] completed');
+    expect(joined).toContain('[2] completed');
+    expect(joined).toContain('Project: voxy-cli');
+    expect(joined).not.toContain('Tools: Bash');
+  });
+
+  test('Full HUD trunca turns em 5 e mostra "[+K turns — abra o sidebar pra ver]"', () => {
+    addTaskOutput(eightTurnsOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('[0]');
+    expect(joined).toContain('[4]');
+    expect(joined).not.toContain('[5]');
+    expect(joined).not.toContain('[6]');
+    expect(joined).toContain('[+3 turns — abra o sidebar pra ver]');
+  });
+
+  test('Reduced HUD degrada metadata quando Tools+Project não cabem — fica só "Project: ..."', () => {
+    const longToolsOutput = [
+      'Task ID: x',
+      'Type: agent',
+      'Agent: Explore',
+      'Description: desc',
+      'Status: completed',
+      'Duration: 1000ms',
+      'Tools used: Glob, Read, Grep, Bash, Edit, Write, Task, TodoWrite',
+      'Project: voxy-cli-monorepo-long',
+      '',
+      'Result:',
+      'x',
+    ];
+    addTaskOutput(longToolsOutput);
+    list.toggleLastTool();
+    // width 70 → textWidth=66 → Reduced. descMax=62 não comporta a string completa (~89 chars)
+    const joined = renderJoined(70);
+    expect(joined).toContain('Project: voxy-cli-monorepo-long');
+    expect(joined).not.toContain('Tools: Glob, Read, Grep, Bash');
+    expect(joined).not.toContain('┌─');
+  });
+
+  test('Minimal HUD (width 50) mantém badge [N TURNS] mas omite metadata', () => {
+    addTaskOutput(multiTurnOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(50);
+    expect(joined).toContain('3 TURNS');
+    expect(joined).not.toContain('Tools:');
+    expect(joined).not.toContain('Project:');
+  });
+
+  test('Collapsed multi-turn mostra badge [3 TURNS]', () => {
+    addTaskOutput(multiTurnOutput);
+    const joined = renderJoined(100);
+    expect(joined).toContain('3 TURNS');
+    expect(joined).toContain('Ctrl+E expandir');
+  });
+
+  test('parseDurationToMs: aceita ms, s decimal, e retorna 0 pra lixo', () => {
+    expect(parseDurationToMs('14.3s')).toBe(14300);
+    expect(parseDurationToMs('250ms')).toBe(250);
+    expect(parseDurationToMs('lixo')).toBe(0);
   });
 });
 
