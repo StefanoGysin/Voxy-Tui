@@ -277,7 +277,8 @@ function renderTaskHudFull(msg: ChatMessage, width: number): { lines: string[]; 
   const headerName = `${theme.agentAccentFg}✦${RESET}${theme.agentCardHeaderBg} ${theme.agentAccentFg}${BOLD}${p.agentType.toUpperCase()} AGENT${RESET}${theme.agentCardHeaderBg}`;
   const headerLeft = `${theme.agentCardHeaderBg} ${icon}${theme.agentCardHeaderBg} ${headerName}`;
   // visual width of left side (stripped)
-  const leftVisual = 1 + 1 + 1 + 1 + 2 + measureWidth(`${p.agentType.toUpperCase()} AGENT`); // " ✓ ✦ NAME AGENT"
+  // visual: " " + icon + " " + "✦" + " " (=5) + "NAME AGENT"
+  const leftVisual = 5 + measureWidth(`${p.agentType.toUpperCase()} AGENT`);
   const gapSize = Math.max(1, width - 1 - leftVisual - badgesVisual - 1); // -1 accent, -1 right pad
   const headerLine = `${bar}${headerLeft}${' '.repeat(gapSize)}${badgesStr}${theme.agentCardHeaderBg} ${RESET}`;
   lines.push(headerLine);
@@ -482,8 +483,7 @@ export function extractTaskOutputMeta(msg: ChatMessage): TaskOutputMeta | null {
     } else if (line.startsWith('Status: ')) {
       status = line.slice(8).trim();
     } else if (line.startsWith('Duration: ')) {
-      const match = line.match(/Duration: (\d+)ms/);
-      if (match) durationMs = parseInt(match[1], 10);
+      durationMs = parseDurationToMs(line.slice(10).trim());
     } else if (line.startsWith('Tools used: ')) {
       toolsUsed = line.slice(12).split(', ').filter(s => s.length > 0);
     } else if (line.startsWith('Project: ')) {
@@ -492,7 +492,14 @@ export function extractTaskOutputMeta(msg: ChatMessage): TaskOutputMeta | null {
       resultStart = i + 1;
     } else if (line === 'Errors:') {
       errorsStart = i + 1;
-    } else if (turnsBlockStart < 0 && /^Turns: \d+/.test(line)) {
+    } else if (
+      turnsBlockStart < 0 &&
+      /^Turns: \d+/.test(line) &&
+      (i === 0 || output[i - 1].trim() === '')
+    ) {
+      // Só reconhece o bloco Turns quando precedido por linha vazia (separador
+      // estrutural do output). Evita falso-positivo se o texto de Result contém
+      // uma linha que por acaso começa com "Turns: N".
       turnsBlockStart = i;
     } else if (turnIndex === undefined) {
       const turnHeaderMatch = line.match(/^Turn (\d+):$/);
@@ -539,11 +546,13 @@ export function extractTaskOutputMeta(msg: ChatMessage): TaskOutputMeta | null {
     if (parsed.length > 0) turns = parsed;
   }
 
+  // Falha é determinada pelo status reportado, não pela mera presença de uma
+  // seção Errors: — um agent pode concluir (completed) e ainda emitir warnings
+  // não-fatais ali sem que isso conte como falha.
   const isError =
     msg.toolStatus === 'error' ||
     status.toLowerCase() === 'failed' ||
-    status.toLowerCase() === 'error' ||
-    errorsText.length > 0;
+    status.toLowerCase() === 'error';
 
   const meta: TaskOutputMeta = {
     agentType: agentType.charAt(0).toUpperCase() + agentType.slice(1),
@@ -680,7 +689,8 @@ function renderTaskOutputHudFull(meta: TaskOutputMeta, width: number): { lines: 
   // ---- Line 1: header (agentCardHeaderBg) ----
   const headerName = `${theme.agentAccentFg}✦${RESET}${theme.agentCardHeaderBg} ${theme.agentAccentFg}${BOLD}${meta.agentType.toUpperCase()} AGENT${RESET}${theme.agentCardHeaderBg}`;
   const headerLeft = `${theme.agentCardHeaderBg} ${icon}${theme.agentCardHeaderBg} ${headerName}`;
-  const leftVisual = 1 + 1 + 1 + 1 + 2 + measureWidth(`${meta.agentType.toUpperCase()} AGENT`);
+  // visual: " " + icon + " " + "✦" + " " (=5) + "NAME AGENT"
+  const leftVisual = 5 + measureWidth(`${meta.agentType.toUpperCase()} AGENT`);
   const gapSize = Math.max(1, width - 1 - leftVisual - badgesVisual - 1);
   lines.push(`${bar}${headerLeft}${' '.repeat(gapSize)}${badgesStr}${theme.agentCardHeaderBg} ${RESET}`);
   bgs.push(theme.agentCardHeaderBg);
