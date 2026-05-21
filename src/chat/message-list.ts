@@ -185,6 +185,56 @@ function accentBar(): string {
   return `${theme.agentAccentFg}${BOLD}┃${RESET}`;
 }
 
+// ----------------------------------------------------------------------------
+// HUD building blocks compartilhados (Task + TaskOutput)
+// ----------------------------------------------------------------------------
+
+/** Borda superior de box com label embutido: ┌─ LABEL ─...─┐ (largura = boxWidth). */
+function boxTopBorder(label: string, boxWidth: number): string {
+  const innerDashes = Math.max(0, boxWidth - 2 - label.length - 1);
+  return `┌─${label}${'─'.repeat(innerDashes)}┐`;
+}
+
+/** Borda inferior de box: └─...─┘ (largura = boxWidth). */
+function boxBottomBorder(boxWidth: number): string {
+  return `└${'─'.repeat(boxWidth - 2)}┘`;
+}
+
+/**
+ * Linha interna de box: │ <conteúdo padded até contentWidth> │.
+ * fitWidth garante padding e truncamento exatos para alinhar a borda direita.
+ */
+function boxContentLine(content: string, contentFg: string, contentWidth: number): string {
+  const fitted = fitWidth(content, contentWidth);
+  return `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${contentFg}${fitted}${RESET}${theme.agentPromptBoxBg} ${theme.textDim}│${RESET}`;
+}
+
+/**
+ * Adiciona o footer padrão do HUD expandido ("visible in sidebar · Tasks" ...
+ * "Ctrl+E recolher"), opcionalmente precedido pela linha tracejada ┄ do card full.
+ */
+function pushHudFooter(
+  lines: string[],
+  bgs: (string | null)[],
+  bar: string,
+  width: number,
+  opts: { dashed: boolean; bg: string },
+): void {
+  if (opts.dashed) {
+    const dashWidth = Math.max(0, width - 2);
+    lines.push(`${bar} ${theme.textMuted}${DIM}${'┄'.repeat(dashWidth)}${RESET}`);
+    bgs.push(theme.agentCardFooterBg);
+  }
+  const hintText = 'Ctrl+E recolher';
+  const sidebarText = 'visible in sidebar · Tasks';
+  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
+  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
+  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
+  const footerGap = Math.max(1, width - footerOverhead);
+  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
+  bgs.push(opts.bg);
+}
+
 function renderTaskCollapsed(msg: ChatMessage, width: number): { lines: string[]; bgs: (string | null)[] } {
   const p = extractTaskParams(msg);
   const icon = statusIcon(p.status);
@@ -244,46 +294,23 @@ function renderTaskHudFull(msg: ChatMessage, width: number): { lines: string[]; 
     // ---- Box: PROMPT PAYLOAD ----
     // box width = width - 4 (accent + 3 indent before box)
     const boxWidth = Math.max(10, width - 4);
-    const label = ' PROMPT PAYLOAD ';
-    // box top: ┌─ PROMPT PAYLOAD ─...─┐
-    const innerTopDashes = Math.max(0, boxWidth - 2 - label.length - 1);
-    const topBorder = `┌─${label}${'─'.repeat(innerTopDashes)}┐`;
-    lines.push(`${bar}   ${theme.textDim}${topBorder}${RESET}`);
+    lines.push(`${bar}   ${theme.textDim}${boxTopBorder(' PROMPT PAYLOAD ', boxWidth)}${RESET}`);
     bgs.push(theme.toolMsgBg);
 
     // inner content width = boxWidth - 4 ("│ " + " │")
     const contentWidth = Math.max(1, boxWidth - 4);
     const promptLines = p.prompt.split('\n').flatMap(l => wrapText(l, contentWidth));
     for (const pLine of promptLines) {
-      // compose inner: "│ " + content + pad + " │"
-      const visual = measureWidth(stripAnsi(pLine));
-      const pad = Math.max(0, contentWidth - visual);
-      const inner = `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${theme.agentPromptFg}${ITALIC}${pLine}${RESET}${theme.agentPromptBoxBg}${' '.repeat(pad)} ${theme.textDim}│${RESET}`;
-      lines.push(`${bar}   ${inner}`);
+      lines.push(`${bar}   ${boxContentLine(pLine, `${theme.agentPromptFg}${ITALIC}`, contentWidth)}`);
       bgs.push(theme.agentPromptBoxBg);
     }
 
-    // box bottom
-    const bottomBorder = `└${'─'.repeat(boxWidth - 2)}┘`;
-    lines.push(`${bar}   ${theme.textDim}${bottomBorder}${RESET}`);
+    lines.push(`${bar}   ${theme.textDim}${boxBottomBorder(boxWidth)}${RESET}`);
     bgs.push(theme.toolMsgBg);
   }
 
   // ---- Footer ----
-  // dashed separator
-  const dashWidth = Math.max(0, width - 2); // accent + " "
-  lines.push(`${bar} ${theme.textMuted}${DIM}${'┄'.repeat(dashWidth)}${RESET}`);
-  bgs.push(theme.agentCardFooterBg);
-
-  // footer line: visible in sidebar · Tasks ... Ctrl+E recolher
-  const hintText = 'Ctrl+E recolher';
-  const sidebarText = 'visible in sidebar · Tasks';
-  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
-  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
-  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
-  const footerGap = Math.max(1, width - footerOverhead);
-  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
-  bgs.push(theme.agentCardFooterBg);
+  pushHudFooter(lines, bgs, bar, width, { dashed: true, bg: theme.agentCardFooterBg });
 
   return { lines, bgs };
 }
@@ -332,14 +359,7 @@ function renderTaskHudReduced(msg: ChatMessage, width: number): { lines: string[
   }
 
   // footer
-  const hintText = 'Ctrl+E recolher';
-  const sidebarText = 'visible in sidebar · Tasks';
-  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
-  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
-  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
-  const footerGap = Math.max(1, width - footerOverhead);
-  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
-  bgs.push(theme.toolMsgBg);
+  pushHudFooter(lines, bgs, bar, width, { dashed: false, bg: theme.toolMsgBg });
 
   return { lines, bgs };
 }
@@ -613,7 +633,7 @@ function renderTurnsBlock(
   return { lines, bgs };
 }
 
-function renderTaskOutputCollapsed(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+function renderTaskOutputCollapsed(meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
   const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
   const hintText = 'Ctrl+E expandir';
   const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
@@ -634,7 +654,7 @@ function renderTaskOutputCollapsed(msg: ChatMessage, meta: TaskOutputMeta, width
   const turnsBadgeStr = showTurnsBadge
     ? buildBadge(`${multiTurnCount} TURNS`, theme.badgeModelFg, theme.badgeModelBg)
     : '';
-  const turnsBadgeVisual = showTurnsBadge ? ` ${multiTurnCount} TURNS `.length : 0;
+  const turnsBadgeVisual = showTurnsBadge ? measureWidth(` ${multiTurnCount} TURNS `) : 0;
 
   const overhead = 1 + 1 + agentVisual + 1 + (showBadge ? badgeVisual + 1 : 0) + (showTurnsBadge ? turnsBadgeVisual + 1 : 0) + 1 + hintText.length + 1;
   const descMax = Math.max(1, width - overhead);
@@ -647,7 +667,7 @@ function renderTaskOutputCollapsed(msg: ChatMessage, meta: TaskOutputMeta, width
   return { lines: [line], bgs: [theme.toolMsgBg] };
 }
 
-function renderTaskOutputHudFull(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+function renderTaskOutputHudFull(meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
   const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
   const accentColor = meta.isError ? theme.dangerFg : theme.agentAccentFg;
   const bar = `${accentColor}${BOLD}┃${RESET}`;
@@ -690,9 +710,7 @@ function renderTaskOutputHudFull(msg: ChatMessage, meta: TaskOutputMeta, width: 
   if (boxText) {
     const boxWidth = Math.max(10, width - 4);
     const label = meta.isError ? ' ERRORS ' : ' RESULT ';
-    const innerTopDashes = Math.max(0, boxWidth - 2 - label.length - 1);
-    const topBorder = `┌─${label}${'─'.repeat(innerTopDashes)}┐`;
-    lines.push(`${bar}   ${theme.textDim}${topBorder}${RESET}`);
+    lines.push(`${bar}   ${theme.textDim}${boxTopBorder(label, boxWidth)}${RESET}`);
     bgs.push(theme.toolMsgBg);
 
     const contentWidth = Math.max(1, boxWidth - 4);
@@ -702,46 +720,27 @@ function renderTaskOutputHudFull(msg: ChatMessage, meta: TaskOutputMeta, width: 
     const contentFg = meta.isError ? theme.dangerFg : theme.agentPromptFg;
 
     for (const pLine of displayLines) {
-      const visual = measureWidth(stripAnsi(pLine));
-      const pad = Math.max(0, contentWidth - visual);
-      const inner = `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${contentFg}${pLine}${RESET}${theme.agentPromptBoxBg}${' '.repeat(pad)} ${theme.textDim}│${RESET}`;
-      lines.push(`${bar}   ${inner}`);
+      lines.push(`${bar}   ${boxContentLine(pLine, contentFg, contentWidth)}`);
       bgs.push(theme.agentPromptBoxBg);
     }
 
     if (truncated) {
       const remaining = allLines.length - MAX_TASK_OUTPUT_RESULT_LINES;
-      const truncLabel = `[+${remaining} linhas]`;
-      const visual = measureWidth(truncLabel);
-      const pad = Math.max(0, contentWidth - visual);
-      const inner = `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${theme.textMuted}${DIM}${truncLabel}${RESET}${theme.agentPromptBoxBg}${' '.repeat(pad)} ${theme.textDim}│${RESET}`;
-      lines.push(`${bar}   ${inner}`);
+      lines.push(`${bar}   ${boxContentLine(`[+${remaining} linhas]`, `${theme.textMuted}${DIM}`, contentWidth)}`);
       bgs.push(theme.agentPromptBoxBg);
     }
 
-    const bottomBorder = `└${'─'.repeat(boxWidth - 2)}┘`;
-    lines.push(`${bar}   ${theme.textDim}${bottomBorder}${RESET}`);
+    lines.push(`${bar}   ${theme.textDim}${boxBottomBorder(boxWidth)}${RESET}`);
     bgs.push(theme.toolMsgBg);
   }
 
   // ---- Footer ----
-  const dashWidth = Math.max(0, width - 2);
-  lines.push(`${bar} ${theme.textMuted}${DIM}${'┄'.repeat(dashWidth)}${RESET}`);
-  bgs.push(theme.agentCardFooterBg);
-
-  const hintText = 'Ctrl+E recolher';
-  const sidebarText = 'visible in sidebar · Tasks';
-  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
-  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
-  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
-  const footerGap = Math.max(1, width - footerOverhead);
-  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
-  bgs.push(theme.agentCardFooterBg);
+  pushHudFooter(lines, bgs, bar, width, { dashed: true, bg: theme.agentCardFooterBg });
 
   return { lines, bgs };
 }
 
-function renderTaskOutputHudReduced(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+function renderTaskOutputHudReduced(meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
   const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
   const accentColor = meta.isError ? theme.dangerFg : theme.agentAccentFg;
   const bar = `${accentColor}${BOLD}┃${RESET}`;
@@ -805,19 +804,12 @@ function renderTaskOutputHudReduced(msg: ChatMessage, meta: TaskOutputMeta, widt
   }
 
   // Footer
-  const hintText = 'Ctrl+E recolher';
-  const sidebarText = 'visible in sidebar · Tasks';
-  const sidebarAnsi = `${theme.textMuted}${DIM}${sidebarText}${RESET}`;
-  const hintAnsi = `${theme.textMuted}${DIM}${hintText}${RESET}`;
-  const footerOverhead = 1 + 1 + sidebarText.length + 1 + hintText.length + 1;
-  const footerGap = Math.max(1, width - footerOverhead);
-  lines.push(`${bar} ${sidebarAnsi}${' '.repeat(footerGap)}${hintAnsi} `);
-  bgs.push(theme.toolMsgBg);
+  pushHudFooter(lines, bgs, bar, width, { dashed: false, bg: theme.toolMsgBg });
 
   return { lines, bgs };
 }
 
-function renderTaskOutputHudMinimal(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+function renderTaskOutputHudMinimal(meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
   const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
   const accentColor = meta.isError ? theme.dangerFg : theme.agentAccentFg;
   const bar = `${accentColor}${BOLD}┃${RESET}`;
@@ -871,7 +863,7 @@ function renderTaskOutputHudMinimal(msg: ChatMessage, meta: TaskOutputMeta, widt
   return { lines, bgs };
 }
 
-function renderTaskOutputTextOnly(msg: ChatMessage, meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
+function renderTaskOutputTextOnly(meta: TaskOutputMeta, width: number): { lines: string[]; bgs: (string | null)[] } {
   const icon = meta.isError ? `${theme.dangerFg}✗${RESET}` : `${theme.successFg}✓${RESET}`;
   const statusText = meta.isError ? 'failed' : 'completed';
   const prefix = `${icon} ${theme.agentAccentFg}${BOLD}${meta.agentType}${RESET}${theme.textDim}: ${RESET}`;
@@ -886,11 +878,11 @@ function renderTaskOutputToolMessage(msg: ChatMessage, width: number): { lines: 
   if (!meta) return null;
 
   const collapsed = msg.toolCollapsed !== false;
-  if (collapsed) return renderTaskOutputCollapsed(msg, meta, width);
-  if (width >= TASK_HUD_FULL_MIN_WIDTH) return renderTaskOutputHudFull(msg, meta, width);
-  if (width >= TASK_HUD_REDUCED_MIN_WIDTH) return renderTaskOutputHudReduced(msg, meta, width);
-  if (width >= TASK_HUD_MINIMAL_MIN_WIDTH) return renderTaskOutputHudMinimal(msg, meta, width);
-  return renderTaskOutputTextOnly(msg, meta, width);
+  if (collapsed) return renderTaskOutputCollapsed(meta, width);
+  if (width >= TASK_HUD_FULL_MIN_WIDTH) return renderTaskOutputHudFull(meta, width);
+  if (width >= TASK_HUD_REDUCED_MIN_WIDTH) return renderTaskOutputHudReduced(meta, width);
+  if (width >= TASK_HUD_MINIMAL_MIN_WIDTH) return renderTaskOutputHudMinimal(meta, width);
+  return renderTaskOutputTextOnly(meta, width);
 }
 
 function renderToolMessage(msg: ChatMessage, width: number): { lines: string[], bgs: (string | null)[] } {
