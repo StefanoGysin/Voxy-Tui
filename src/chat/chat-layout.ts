@@ -26,6 +26,11 @@ const SCROLL_LINES = 3;   // mouse wheel: linhas por evento
 const PAGE_LINES   = 10;  // pageup/pagedown: linhas por evento
 const SCROLL_THROTTLE_MS = 16; // throttle de mouse scroll (~60fps)
 
+// Abaixo deste threshold (largura clássica mínima de terminal), o layout entra
+// em modo exclusivo: sidebar visível → fullscreen total; sidebar oculto → chat
+// fullscreen. Split view só existe em wide (>= 80).
+const NARROW_THRESHOLD = 80;
+
 export class ChatLayout implements Component {
   readonly messageList: MessageList;
   readonly inputBar: InputBar;
@@ -41,6 +46,7 @@ export class ChatLayout implements Component {
   private lastSidebarWidth = 0;
   private lastPermStartY = 0;
   private lastPermHeight = 0;
+  private lastStatusStartY = 0;
 
   constructor() {
     this.messageList = new MessageList();
@@ -108,20 +114,51 @@ export class ChatLayout implements Component {
   render(width: number, height: number): string[] {
     // Calcular largura do sidebar
     const sidebarVisible = this.sidebarComponent?.isVisible() === true;
+    const narrow = width < NARROW_THRESHOLD;
     const MIN_SIDEBAR_WIDTH = 28;
     const MIN_CHAT_WIDTH = 40;
 
-    let chatWidth = width;
-    let sidebarWidth = 0;
+    let chatWidth: number;
+    let sidebarWidth: number;
 
-    if (sidebarVisible && width >= MIN_CHAT_WIDTH + MIN_SIDEBAR_WIDTH) {
+    if (narrow) {
+      if (sidebarVisible) {
+        sidebarWidth = width;
+        chatWidth = 0;
+      } else {
+        sidebarWidth = 0;
+        chatWidth = width;
+      }
+    } else if (sidebarVisible && width >= MIN_CHAT_WIDTH + MIN_SIDEBAR_WIDTH) {
       // ~30% para sidebar, mínimo MIN_SIDEBAR_WIDTH, máximo 40
       sidebarWidth = Math.min(40, Math.max(MIN_SIDEBAR_WIDTH, Math.floor(width * 0.3)));
       chatWidth = width - sidebarWidth;
+    } else {
+      sidebarWidth = 0;
+      chatWidth = width;
     }
 
     this.lastChatWidth = chatWidth;
     this.lastSidebarWidth = sidebarWidth;
+
+    // Narrow + sidebar = fullscreen total. Chat inteiro é omitido (sem
+    // messageList, sem activityLog, sem toast, sem permission, sem status,
+    // sem inputBar). Saída: usuário pressiona Ctrl+B (capturado acima do
+    // ChatLayout) → sidebar.setVisible(false) → próximo render cai no modo
+    // chat fullscreen.
+    if (narrow && sidebarVisible && this.sidebarComponent) {
+      this.sidebarFocused = true;
+      this.lastMessagesHeight = 0;
+      this.lastPermStartY = 0;
+      this.lastPermHeight = 0;
+      this.lastStatusStartY = 0;
+      const sidebarLines = this.sidebarComponent.render(sidebarWidth, height);
+      const result: string[] = [];
+      for (let i = 0; i < height; i++) {
+        result.push(sidebarLines[i] ?? '');
+      }
+      return result;
+    }
 
     // Renderizar chat com chatWidth
     const statusHeight = 1;
@@ -134,6 +171,7 @@ export class ChatLayout implements Component {
     this.lastMessagesHeight = messagesHeight;
     this.lastPermStartY = messagesHeight + activityHeight + toastHeight + 1;
     this.lastPermHeight = permHeight;
+    this.lastStatusStartY = messagesHeight + activityHeight + toastHeight + permHeight + 1;
 
     const messageLines = this.messageList.render(chatWidth, messagesHeight);
     const activityLines = activityHeight > 0
@@ -203,6 +241,13 @@ export class ChatLayout implements Component {
           y: event.y - this.lastPermStartY,
         };
         return this.permissionSlot.handleMouse(localEvent);
+      }
+    }
+
+    // Click na StatusBar → delegar (abre tasks se indicador ativo)
+    if (this.lastStatusStartY > 0 && event.y === this.lastStatusStartY) {
+      if (this.statusBar.handleMouse(event)) {
+        return true;
       }
     }
 

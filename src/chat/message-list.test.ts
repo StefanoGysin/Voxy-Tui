@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { MessageList } from './message-list';
+import { MessageList, extractTaskOutputMeta, parseDurationToMs } from './message-list';
 import type { ChatMessage } from './types';
 import { stripAnsi } from '../utils/strip-ansi';
 import { BOLD, FG_CYAN, RESET } from '../core/ansi';
@@ -171,6 +171,538 @@ describe('MessageList — tool messages', () => {
     const msgs = (list as any).messages as ChatMessage[];
     expect(msgs[0].toolCollapsed).toBe(true);
     expect(msgs[1].toolCollapsed).toBe(false);
+  });
+
+  test('tool expandido com input longo quebra em múltiplas linhas', () => {
+    list.addToolMessage(
+      'tu1', 'Bash', '', [], 'done',
+      { command: 'a'.repeat(200) },
+    );
+    list.toggleLastTool();
+    const lines = list.render(50, 20);
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).toContain('↳');
+    expect(joined).toContain('aaa');
+  });
+
+  test('tool expandido com input multi-linha preserva todas as linhas', () => {
+    list.addToolMessage(
+      'tu1', 'Bash', '', [], 'done',
+      { command: 'linha1\nlinha2\nlinha3' },
+    );
+    list.toggleLastTool();
+    const lines = list.render(80, 20);
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).toContain('linha1');
+    expect(joined).toContain('linha2');
+    expect(joined).toContain('linha3');
+  });
+
+  test('tool expandido com input curto ainda em linha única', () => {
+    list.addToolMessage(
+      'tu1', 'read', '', [], 'done',
+      { file_path: '/a.ts' },
+    );
+    list.toggleLastTool();
+    const lines = list.render(80, 20);
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).toContain('file_path: /a.ts');
+    const inputSection = joined.split('─')[0];
+    expect(inputSection).not.toContain('↳');
+  });
+});
+
+describe('MessageList — Task tool HUD', () => {
+  let list: MessageList;
+
+  beforeEach(() => {
+    list = new MessageList();
+  });
+
+  function addTask(rawInput?: Record<string, unknown>): void {
+    list.addToolMessage(
+      'toolu_01abcdef12345',
+      'task',
+      '',
+      [],
+      'done',
+      rawInput,
+    );
+  }
+
+  function renderJoined(width: number): string {
+    const lines = list.render(width, 30);
+    return stripAnsi(lines.join('\n'));
+  }
+
+  test('Full HUD (width 100, expandido): header uppercase + badge ASYNC', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs deste repositório',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('EXPLORE AGENT');
+    expect(joined).toContain('ASYNC');
+  });
+
+  test('Full HUD (width 100): PROMPT PAYLOAD box com bordas', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs deste repositório',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('PROMPT PAYLOAD');
+    expect(joined).toContain('┌─');
+    expect(joined).toContain('└');
+  });
+
+  test('Reduced (width 70): header uppercase + badge mas SEM PROMPT PAYLOAD box', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs deste repositório',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(70);
+    expect(joined).toContain('ASYNC');
+    expect(joined).not.toContain('PROMPT PAYLOAD');
+    expect(joined).not.toContain('┌─');
+  });
+
+  test('Minimal (width 50): sem badges, sem uppercase, só accent + nome', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore a pasta docs',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    list.toggleLastTool();
+    const joined = renderJoined(50);
+    expect(joined).not.toContain('ASYNC');
+    expect(joined).not.toContain('EXPLORE AGENT');
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('Explorar pasta docs');
+  });
+
+  test('Text-only (width 30, expandido): 1 linha sem accent bar', () => {
+    addTask({
+      description: 'Explorar docs',
+      prompt: 'Explore',
+      subagent_type: 'Explore',
+    });
+    list.toggleLastTool();
+    const lines = list.render(30, 10);
+    const contentLines = lines.filter(l => stripAnsi(l).trim().length > 0 && !stripAnsi(l).match(/^─+$/));
+    const joined = stripAnsi(contentLines.join('\n'));
+    expect(joined).toContain('✓');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('Explorar');
+    expect(joined).not.toContain('┃');
+  });
+
+  test('Colapsado (width 80): contém badge ASYNC + description + hint', () => {
+    addTask({
+      description: 'Explorar pasta docs',
+      prompt: 'Explore',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    const joined = renderJoined(80);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('ASYNC');
+    expect(joined).toContain('Explorar pasta docs');
+    expect(joined).toContain('Ctrl+E');
+  });
+
+  test('Colapsado (width 50): sem badge ASYNC mas com description', () => {
+    addTask({
+      description: 'Explorar docs',
+      prompt: 'Explore',
+      subagent_type: 'Explore',
+      run_in_background: true,
+    });
+    const joined = renderJoined(50);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('Ctrl+E');
+    expect(joined).not.toContain('ASYNC');
+  });
+
+  test('Full HUD footer mostra "visible in sidebar · Tasks" em vez de ID', () => {
+    list.addToolMessage(
+      'toolu_01ABCDEFGH', 'task', '', [], 'done',
+      { description: 'Teste', prompt: 'p', subagent_type: 'Explore', run_in_background: true },
+    );
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('visible in sidebar · Tasks');
+    expect(joined).not.toContain('ABCDEFGH');
+    expect(joined).not.toContain('id: ');
+  });
+
+  test('Reduced HUD footer mostra "visible in sidebar · Tasks" em vez de ID', () => {
+    list.addToolMessage(
+      'toolu_01ABCDEFGH', 'task', '', [], 'done',
+      { description: 'Teste', prompt: 'p', subagent_type: 'Explore', run_in_background: true },
+    );
+    list.toggleLastTool();
+    const joined = renderJoined(70);
+    expect(joined).toContain('visible in sidebar · Tasks');
+    expect(joined).not.toContain('ABCDEFGH');
+    expect(joined).not.toContain('id: ');
+  });
+
+  test('Task sem toolRawInput: não crasha, renderiza fallback', () => {
+    list.addToolMessage('toolu_01xyz', 'task', 'fallback description', [], 'done');
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('GENERAL-PURPOSE AGENT');
+    expect(joined).toContain('fallback description');
+  });
+});
+
+describe('MessageList — TaskOutput tool HUD', () => {
+  let list: MessageList;
+
+  beforeEach(() => {
+    list = new MessageList();
+  });
+
+  const successOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Explorar docs',
+    'Status: completed',
+    'Duration: 22656ms',
+    '',
+    'Result:',
+    '## Índice (técnico)',
+    '- docs/llm/INDEX.md — mapa da documentação',
+    '- docs/user/commands/README.md — lista de comandos',
+  ];
+
+  const errorOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Buscar arquivos',
+    'Status: failed',
+    'Duration: 5000ms',
+    '',
+    'Errors:',
+    'Permission denied',
+    'Cannot access /restricted',
+  ];
+
+  function addTaskOutput(output: string[], status: 'done' | 'error' = 'done'): void {
+    list.addToolMessage(
+      'toolu_01ABC',
+      'TaskOutput',
+      'task_id: "3321de5f"',
+      output,
+      status,
+      { task_id: '3321de5f', block: true },
+    );
+  }
+
+  function renderJoined(width: number, height = 30): string {
+    return stripAnsi(list.render(width, height).join('\n'));
+  }
+
+  test('Full HUD (width 100, expandido): EXPLORE AGENT + COMPLETED + RESULT + duration', () => {
+    addTaskOutput(successOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('EXPLORE AGENT');
+    expect(joined).toContain('COMPLETED');
+    expect(joined).toContain('RESULT');
+    expect(joined).toContain('22.7S'); // buildBadge uppercases all labels
+    expect(joined).toContain('Explorar docs');
+    expect(joined).toContain('Índice');
+  });
+
+  test('Full HUD com erro: FAILED + ERRORS + accent bar vermelha (dangerFg)', () => {
+    addTaskOutput(errorOutput, 'error');
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('FAILED');
+    expect(joined).toContain('ERRORS');
+    expect(joined).toContain('Permission denied');
+    expect(joined).not.toContain('COMPLETED');
+    // Accent bar deve usar dangerFg
+    const rawLines = list.render(100, 30).join('\n');
+    expect(rawLines).toContain(theme.dangerFg + BOLD + '┃');
+  });
+
+  test('Reduced (width 70, expandido): badges mas SEM box RESULT', () => {
+    addTaskOutput(successOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(70);
+    expect(joined).toContain('COMPLETED');
+    expect(joined).toContain('22.7S'); // buildBadge uppercases all labels
+    expect(joined).not.toContain('┌─');
+    expect(joined).not.toContain(' RESULT ');
+  });
+
+  test('Colapsado (width 80): agent + COMPLETED + description + hint', () => {
+    addTaskOutput(successOutput);
+    const joined = renderJoined(80);
+    expect(joined).toContain('✦');
+    expect(joined).toContain('Explore');
+    expect(joined).toContain('COMPLETED');
+    expect(joined).toContain('Explorar docs');
+    expect(joined).toContain('Ctrl+E');
+  });
+
+  test('Fallback: output sem Agent: line → render genérico (sem HUD)', () => {
+    addTaskOutput([
+      'Task ID: xxx',
+      'Type: shell',
+      'Status: completed',
+    ]);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).not.toContain('EXPLORE AGENT');
+    expect(joined).not.toContain('COMPLETED ');
+    expect(joined).toContain('TaskOutput');
+  });
+
+  test('Fallback: TaskOutput sem output → render genérico', () => {
+    list.addToolMessage('tu1', 'TaskOutput', 'x', [], 'done', { task_id: 'x' });
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).not.toContain('EXPLORE AGENT');
+    expect(joined).toContain('TaskOutput');
+  });
+
+  // ========================================================================
+  // Ampliação: Tools used / Project / Turns blocks (formatos novos do voxy-cli)
+  // ========================================================================
+
+  const successOutputEnriched = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Contar .ts em tasks',
+    'Status: completed',
+    'Duration: 3879ms',
+    'Tools used: Glob, Read',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    '5',
+    '/tasks/index.ts',
+  ];
+
+  const multiTurnOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Contar .ts em tasks',
+    'Status: completed',
+    'Duration: 3879ms',
+    'Tools used: Bash',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    'output do turn final',
+    '',
+    'Turns: 3  (use turnIndex to inspect a specific turn)',
+    '  [0] sync · completed · 14.3s · tools: Read, Glob',
+    '  [1] background · completed · 250ms · tools: -',
+    '  [2] sync · completed · 3.9s · tools: Glob',
+  ];
+
+  const eightTurnsOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: Task longa',
+    'Status: completed',
+    'Duration: 40000ms',
+    'Tools used: Bash',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    'final',
+    '',
+    'Turns: 8',
+    '  [0] sync · completed · 14.3s · tools: Read',
+    '  [1] sync · completed · 5.1s · tools: Read',
+    '  [2] sync · completed · 3.9s · tools: Glob',
+    '  [3] sync · completed · 2.1s · tools: Bash',
+    '  [4] sync · completed · 3.9s · tools: Glob',
+    '  [5] sync · completed · 1.0s · tools: Bash',
+    '  [6] sync · completed · 1.0s · tools: Bash',
+    '  [7] sync · completed · 1.0s · tools: Bash',
+  ];
+
+  const turnIndexOutput = [
+    'Task ID: 3321de5f',
+    'Type: agent',
+    'Agent: Explore',
+    'Description: turno específico',
+    'Turn 1:',
+    'Status: completed',
+    'Duration: 5100ms',
+    'Tools used: Bash',
+    'Project: voxy-cli',
+    '',
+    'Result:',
+    'algum output do turno 1',
+  ];
+
+  function msgWith(output: string[]): ChatMessage {
+    return {
+      id: 'x',
+      role: 'tool',
+      content: '',
+      timestamp: new Date('2025-01-01T10:00:00'),
+      toolName: 'TaskOutput',
+      toolInput: 'x',
+      toolOutput: output,
+      toolStatus: 'done',
+    };
+  }
+
+  test('extractTaskOutputMeta parseia "Tools used: A, B"', () => {
+    const meta = extractTaskOutputMeta(msgWith(successOutputEnriched));
+    expect(meta?.toolsUsed).toEqual(['Glob', 'Read']);
+  });
+
+  test('extractTaskOutputMeta parseia "Project: name"', () => {
+    const meta = extractTaskOutputMeta(msgWith(successOutputEnriched));
+    expect(meta?.projectName).toBe('voxy-cli');
+  });
+
+  test('extractTaskOutputMeta: ausência de "Tools used" → toolsUsed === []', () => {
+    const meta = extractTaskOutputMeta(msgWith(successOutput));
+    expect(meta?.toolsUsed).toEqual([]);
+    expect(meta?.projectName).toBe('');
+  });
+
+  test('extractTaskOutputMeta parseia "Turn N:" como turnIndex', () => {
+    const meta = extractTaskOutputMeta(msgWith(turnIndexOutput));
+    expect(meta?.turnIndex).toBe(1);
+  });
+
+  test('extractTaskOutputMeta parseia bloco Turns multi-linha', () => {
+    const meta = extractTaskOutputMeta(msgWith(multiTurnOutput));
+    expect(meta?.turns).toBeDefined();
+    expect(meta?.turns?.length).toBe(3);
+    expect(meta?.turns?.[0].index).toBe(0);
+    expect(meta?.turns?.[0].status).toBe('completed');
+    expect(meta?.turns?.[0].durationMs).toBe(14300);
+    expect(meta?.turns?.[0].toolsUsed).toEqual(['Read', 'Glob']);
+  });
+
+  test('extractTaskOutputMeta trata "tools: -" como toolsUsed=[]', () => {
+    const meta = extractTaskOutputMeta(msgWith(multiTurnOutput));
+    expect(meta?.turns?.[1].toolsUsed).toEqual([]);
+  });
+
+  test('extractTaskOutputMeta parseia duração "250ms" em turn line', () => {
+    const meta = extractTaskOutputMeta(msgWith(multiTurnOutput));
+    expect(meta?.turns?.[1].durationMs).toBe(250);
+  });
+
+  test('Full HUD single-turn com tools mostra linha "Tools: ... · Project: ..."', () => {
+    addTaskOutput(successOutputEnriched);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('Tools: Glob, Read');
+    expect(joined).toContain('Project: voxy-cli');
+  });
+
+  test('Full HUD single-turn SEM tools/project (legado) não adiciona linha metadata', () => {
+    addTaskOutput(successOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('COMPLETED');
+    expect(joined).not.toContain('Tools:');
+    expect(joined).not.toContain('Project:');
+  });
+
+  test('Full HUD multi-turn mostra badge [3 TURNS] + box TURNS (3)', () => {
+    addTaskOutput(multiTurnOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('3 TURNS');
+    expect(joined).toContain('TURNS (3)');
+    expect(joined).toContain('[0] sync · completed');
+    expect(joined).toContain('[1] background · completed');
+    expect(joined).toContain('[2] sync · completed');
+    expect(joined).toContain('Project: voxy-cli');
+    expect(joined).not.toContain('Tools: Bash');
+  });
+
+  test('Full HUD trunca turns em 5 e mostra "[+K turns — abra o sidebar pra ver]"', () => {
+    addTaskOutput(eightTurnsOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(100);
+    expect(joined).toContain('[0]');
+    expect(joined).toContain('[4]');
+    expect(joined).not.toContain('[5]');
+    expect(joined).not.toContain('[6]');
+    expect(joined).toContain('[+3 turns — abra o sidebar pra ver]');
+  });
+
+  test('Reduced HUD degrada metadata quando Tools+Project não cabem — fica só "Project: ..."', () => {
+    const longToolsOutput = [
+      'Task ID: x',
+      'Type: agent',
+      'Agent: Explore',
+      'Description: desc',
+      'Status: completed',
+      'Duration: 1000ms',
+      'Tools used: Glob, Read, Grep, Bash, Edit, Write, Task, TodoWrite',
+      'Project: voxy-cli-monorepo-long',
+      '',
+      'Result:',
+      'x',
+    ];
+    addTaskOutput(longToolsOutput);
+    list.toggleLastTool();
+    // width 70 → textWidth=66 → Reduced. descMax=62 não comporta a string completa (~89 chars)
+    const joined = renderJoined(70);
+    expect(joined).toContain('Project: voxy-cli-monorepo-long');
+    expect(joined).not.toContain('Tools: Glob, Read, Grep, Bash');
+    expect(joined).not.toContain('┌─');
+  });
+
+  test('Minimal HUD (width 50) mantém badge [N TURNS] mas omite metadata', () => {
+    addTaskOutput(multiTurnOutput);
+    list.toggleLastTool();
+    const joined = renderJoined(50);
+    expect(joined).toContain('3 TURNS');
+    expect(joined).not.toContain('Tools:');
+    expect(joined).not.toContain('Project:');
+  });
+
+  test('Collapsed multi-turn mostra badge [3 TURNS]', () => {
+    addTaskOutput(multiTurnOutput);
+    const joined = renderJoined(100);
+    expect(joined).toContain('3 TURNS');
+    expect(joined).toContain('Ctrl+E expandir');
+  });
+
+  test('parseDurationToMs: aceita ms, s decimal, e retorna 0 pra lixo', () => {
+    expect(parseDurationToMs('14.3s')).toBe(14300);
+    expect(parseDurationToMs('250ms')).toBe(250);
+    expect(parseDurationToMs('lixo')).toBe(0);
   });
 });
 

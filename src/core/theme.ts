@@ -63,6 +63,19 @@ export interface Theme {
   readonly toolDoneFg: string;
   readonly toolErrorFg: string;
   readonly toolLabelFg: string;
+
+  // Agent (Task tool) HUD
+  readonly agentAccentFg: string;
+  readonly agentPromptFg: string;
+  readonly agentCardHeaderBg: string;
+  readonly agentPromptBoxBg: string;
+  readonly agentCardFooterBg: string;
+  readonly badgeAsyncFg: string;
+  readonly badgeAsyncBg: string;
+  readonly badgeModelFg: string;
+  readonly badgeModelBg: string;
+  readonly badgeCompletedBg: string;
+  readonly badgeFailedBg: string;
 }
 
 export const theme: Theme = {
@@ -155,6 +168,19 @@ export const theme: Theme = {
   toolDoneFg: fg(74, 222, 128),
   toolErrorFg: fg(239, 68, 68),
   toolLabelFg: fg(139, 148, 158),
+
+  // Agent (Task tool) HUD
+  agentAccentFg: fg(195, 166, 255),
+  agentPromptFg: fg(184, 195, 217),
+  agentCardHeaderBg: bg(22, 28, 48),
+  agentPromptBoxBg: bg(5, 7, 14),
+  agentCardFooterBg: bg(10, 14, 26),
+  badgeAsyncFg: fg(95, 199, 255),
+  badgeAsyncBg: bg(15, 31, 53),
+  badgeModelFg: fg(229, 192, 123),
+  badgeModelBg: bg(30, 26, 15),
+  badgeCompletedBg: bg(10, 32, 24),
+  badgeFailedBg: bg(42, 18, 21),
 };
 
 /** Caractere visual para borda de item selecionado (não é sequência ANSI). */

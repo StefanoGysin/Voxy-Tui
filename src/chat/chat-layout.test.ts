@@ -225,6 +225,31 @@ describe('ChatLayout — handleMouse', () => {
     const result = layout.handleMouseDrag({ x: 5, y: 30, button: 0 });
     expect(result).toBe(false);
   });
+
+  test('click na StatusBar com tasks ativas delega ao statusBar.handleMouse', () => {
+    layout = new ChatLayout();
+    layout.statusBar.setTasks(2, false);
+    let clicked = false;
+    layout.statusBar.onTaskIndicatorClick = () => { clicked = true; };
+    layout.render(80, 30);
+    // statusBar Y = (layout as any).lastStatusStartY — calculado no render
+    const statusY = (layout as any).lastStatusStartY as number;
+    expect(statusY).toBeGreaterThan(0);
+    const result = layout.handleMouse({ x: 5, y: statusY, button: 0, isRelease: false });
+    expect(result).toBe(true);
+    expect(clicked).toBe(true);
+  });
+
+  test('click na StatusBar sem tasks ativas cai no fallback (foca input)', () => {
+    layout = new ChatLayout();
+    let clicked = false;
+    layout.statusBar.onTaskIndicatorClick = () => { clicked = true; };
+    layout.render(80, 30);
+    const statusY = (layout as any).lastStatusStartY as number;
+    const result = layout.handleMouse({ x: 5, y: statusY, button: 0, isRelease: false });
+    expect(result).toBe(true);
+    expect(clicked).toBe(false);
+  });
 });
 
 describe('ChatLayout — toast', () => {
@@ -385,16 +410,15 @@ describe('ChatLayout — sidebar render', () => {
     expect(hasBorder).toBe(true);
   });
 
-  test('sidebar visível em terminal estreito (< 68): sidebar auto-esconde', () => {
+  test('sidebar visível em terminal estreito (< 80): sidebar vira fullscreen', () => {
     layout.setSidebar(sidebar);
     sidebar.setVisible(true);
-    // 50 cols < 40 (min chat) + 28 (min sidebar) = 68
     const lines = layout.render(50, 20);
     expect(lines).toHaveLength(20);
-    // Não deve ter conteúdo de sidebar (sem borda │)
+    // Narrow + sidebar → sidebar fullscreen, chat some. Borda │ aparece.
     const stripped = lines.map(l => stripAnsi(l));
     const hasBorder = stripped.some(l => l.includes('│'));
-    expect(hasBorder).toBe(false);
+    expect(hasBorder).toBe(true);
   });
 
   test('sidebar visível em terminal largo: sidebar ocupa ~30%', () => {
@@ -712,5 +736,87 @@ describe('ChatLayout — permissionDialogSlot', () => {
     expect(lines).toHaveLength(20);
     const hasPerm = lines.some(l => l.includes('PERM'));
     expect(hasPerm).toBe(false);
+  });
+});
+
+describe('ChatLayout — adaptive layout (narrow/wide)', () => {
+  let layout: ChatLayout;
+  let sidebar: Sidebar;
+
+  beforeEach(() => {
+    layout = new ChatLayout();
+    sidebar = new Sidebar();
+    sidebar.addTab(createFakeTab('tab1', 'Settings'));
+    layout.setSidebar(sidebar);
+  });
+
+  afterEach(() => {
+    layout.statusBar.dispose();
+  });
+
+  test('wide: width >= 80 com sidebar renderiza split (chatWidth + sidebarWidth = width)', () => {
+    sidebar.setVisible(true);
+    const width = 100;
+    const lines = layout.render(width, 20);
+    expect(lines).toHaveLength(20);
+    // Cada linha deve ter exatamente width colunas visuais (merge horizontal)
+    for (const line of lines) {
+      expect(measureWidth(stripAnsi(line))).toBe(width);
+    }
+    // Ambas larguras positivas (split view real)
+    expect((layout as any).lastChatWidth).toBeGreaterThan(0);
+    expect((layout as any).lastSidebarWidth).toBeGreaterThan(0);
+    expect((layout as any).lastChatWidth + (layout as any).lastSidebarWidth).toBe(width);
+  });
+
+  test('wide: width >= 80 sem sidebar renderiza chat full width', () => {
+    // sidebar não visível
+    const lines = layout.render(120, 20);
+    expect(lines).toHaveLength(20);
+    expect((layout as any).lastChatWidth).toBe(120);
+    expect((layout as any).lastSidebarWidth).toBe(0);
+  });
+
+  test('narrow: width < 80 com sidebar renderiza sidebar fullscreen (chatWidth = 0)', () => {
+    sidebar.setVisible(true);
+    const lines = layout.render(60, 20);
+    expect(lines).toHaveLength(20);
+    expect((layout as any).lastChatWidth).toBe(0);
+    expect((layout as any).lastSidebarWidth).toBe(60);
+    // Sidebar renderiza com borda │
+    const stripped = lines.map(l => stripAnsi(l));
+    expect(stripped.some(l => l.includes('│'))).toBe(true);
+    // Input bar não deve aparecer (chat completamente omitido)
+    expect(stripped.some(l => l.includes('Type a message'))).toBe(false);
+  });
+
+  test('narrow: width < 80 sem sidebar renderiza chat fullscreen (sidebarWidth = 0)', () => {
+    // sidebar não visível
+    const lines = layout.render(60, 20);
+    expect(lines).toHaveLength(20);
+    expect((layout as any).lastChatWidth).toBe(60);
+    expect((layout as any).lastSidebarWidth).toBe(0);
+    // Chat deve aparecer (inputBar placeholder visível)
+    const stripped = lines.map(l => stripAnsi(l));
+    expect(stripped.some(l => l.includes('Type a message'))).toBe(true);
+    // Sem borda de sidebar
+    expect(stripped.some(l => l.includes('│'))).toBe(false);
+  });
+
+  test('narrow + sidebar: lastMessagesHeight/lastPermStartY/lastPermHeight são 0', () => {
+    sidebar.setVisible(true);
+    layout.render(60, 20);
+    expect((layout as any).lastMessagesHeight).toBe(0);
+    expect((layout as any).lastPermStartY).toBe(0);
+    expect((layout as any).lastPermHeight).toBe(0);
+  });
+
+  test('narrow + sidebar: click em qualquer x é routed pra sidebar', () => {
+    sidebar.setVisible(true);
+    layout.render(60, 20);
+    // Click no x=5 (esquerda) — em wide iria pro chat, em narrow vai pro sidebar
+    const result = layout.handleMouse({ x: 5, y: 3, button: 0, isRelease: false });
+    expect(result).toBe(true);
+    expect(layout.isSidebarFocused()).toBe(true);
   });
 });
