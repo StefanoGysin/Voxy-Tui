@@ -642,9 +642,9 @@ describe('MessageList — TaskOutput tool HUD', () => {
     const joined = renderJoined(100);
     expect(joined).toContain('3 TURNS');
     expect(joined).toContain('TURNS (3)');
-    expect(joined).toContain('[0] completed');
-    expect(joined).toContain('[1] completed');
-    expect(joined).toContain('[2] completed');
+    expect(joined).toContain('[0] sync · completed');
+    expect(joined).toContain('[1] background · completed');
+    expect(joined).toContain('[2] sync · completed');
     expect(joined).toContain('Project: voxy-cli');
     expect(joined).not.toContain('Tools: Bash');
   });

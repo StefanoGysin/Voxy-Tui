@@ -607,10 +607,7 @@ function renderTurnsBlock(
   const lines: string[] = [];
   const bgs: (string | null)[] = [];
   const boxWidth = Math.max(10, width - 4);
-  const label = ` TURNS (${turns.length}) `;
-  const innerTopDashes = Math.max(0, boxWidth - 2 - label.length - 1);
-  const topBorder = `┌─${label}${'─'.repeat(innerTopDashes)}┐`;
-  lines.push(`${bar}   ${theme.textDim}${topBorder}${RESET}`);
+  lines.push(`${bar}   ${theme.textDim}${boxTopBorder(` TURNS (${turns.length}) `, boxWidth)}${RESET}`);
   bgs.push(theme.toolMsgBg);
 
   const contentWidth = Math.max(1, boxWidth - 4);
@@ -619,24 +616,19 @@ function renderTurnsBlock(
 
   for (const t of visible) {
     const toolsStr = t.toolsUsed.length > 0 ? t.toolsUsed.join(', ') : '-';
-    const raw = `[${t.index}] ${t.status} · ${formatDurationSec(t.durationMs)} · ${toolsStr}`;
-    const fitted = fitWidth(raw, contentWidth);
-    const inner = `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${theme.agentPromptFg}${fitted}${RESET}${theme.agentPromptBoxBg} ${theme.textDim}│${RESET}`;
-    lines.push(`${bar}   ${inner}`);
+    const raw = `[${t.index}] ${t.mode} · ${t.status} · ${formatDurationSec(t.durationMs)} · ${toolsStr}`;
+    lines.push(`${bar}   ${boxContentLine(raw, theme.agentPromptFg, contentWidth)}`);
     bgs.push(theme.agentPromptBoxBg);
   }
 
   if (truncated) {
     const remaining = turns.length - MAX_TASK_OUTPUT_TURNS_LINES;
     const truncLabel = `[+${remaining} turns — abra o sidebar pra ver]`;
-    const fitted = fitWidth(truncLabel, contentWidth);
-    const inner = `${theme.textDim}│${RESET}${theme.agentPromptBoxBg} ${theme.textMuted}${DIM}${fitted}${RESET}${theme.agentPromptBoxBg} ${theme.textDim}│${RESET}`;
-    lines.push(`${bar}   ${inner}`);
+    lines.push(`${bar}   ${boxContentLine(truncLabel, `${theme.textMuted}${DIM}`, contentWidth)}`);
     bgs.push(theme.agentPromptBoxBg);
   }
 
-  const bottomBorder = `└${'─'.repeat(boxWidth - 2)}┘`;
-  lines.push(`${bar}   ${theme.textDim}${bottomBorder}${RESET}`);
+  lines.push(`${bar}   ${theme.textDim}${boxBottomBorder(boxWidth)}${RESET}`);
   bgs.push(theme.toolMsgBg);
 
   return { lines, bgs };
