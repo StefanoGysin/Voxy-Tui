@@ -110,6 +110,19 @@ describe('MessageList — tool messages', () => {
     expect(joined).toContain('✗');
   });
 
+  test('header de tool MCP preserva nome formatado (não re-capitaliza)', () => {
+    // O consumidor já entrega o display name; a lib renderiza cru.
+    list.addToolMessage('1', 'filesystem:list_directory_with_sizes (MCP)', '', [], 'done');
+    const lines = list.render(80, 10);
+    const headerLineIdx = lines.findIndex(l =>
+      stripAnsi(l).includes('filesystem:list_directory_with_sizes (MCP)'),
+    );
+    expect(headerLineIdx).toBeGreaterThanOrEqual(0);
+    // Não deve aparecer a versão re-capitalizada.
+    const joined = stripAnsi(lines.join('\n'));
+    expect(joined).not.toContain('Filesystem:list_directory_with_sizes');
+  });
+
   test('output grande é colapsado por default (1 linha)', () => {
     const output = ['a', 'b', 'c', 'd', 'e', 'f'];
     list.addToolMessage('1', 'Bash', 'cmd: ls', output, 'done');
