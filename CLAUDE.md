@@ -10,7 +10,7 @@ Orientações para agentes de automação voxy-tui. Regras obrigatórias, armadi
 
 ## Visão Geral
 
-Biblioteca TUI em TypeScript para agentes CLI de LLM (Claude Code, Gemini CLI, voxy-cli).
+Biblioteca TUI em TypeScript para agentes CLI de LLM. Consumidor atual: voxy-cli.
 Paradigma imperativo: `new Component()`, `.render()`, `.update()` — sem React, sem Ink, sem Yoga.
 
 ---
@@ -26,28 +26,27 @@ Paradigma imperativo: `new Component()`, `.render()`, `.update()` — sem React,
 
 ## Git & Conventional Commits
 
-**Formato obrigatório**:
+Mesmo padrão de todos os projetos do workspace (ver CLAUDE.md global).
+
+**Formato**:
 ```
 <type>(<scope>): <descrição em português>
 
-- detalhe 1
-- detalhe 2
-
-🤖 Gerado com Voxy & {MODEL_NAME}
+[corpo opcional explicando o porquê da mudança]
 ```
+
+Tipos: `feat` `fix` `refactor` `docs` `chore` `test` `style` `perf`.
 
 **Exemplos válidos**:
 ```bash
-feat(chat): Adiciona suporte a streaming de mensagens
-fix(renderer): Corrige threshold de full redraw
-refactor(core): Exporta modificadores ANSI no barrel público
+feat(chat): adiciona suporte a streaming de mensagens
+fix(renderer): corrige threshold de full redraw
+refactor(core): exporta modificadores ANSI no barrel público
 ```
 
-**Branches**:
-- `feat/*`, `fix/*`, `refactor/*` — merge para `main` com `--no-ff`
+**Branches**: Stefano cria as branches manualmente. Cada unidade de trabalho ganha branch dedicada (`feat/*`, `fix/*`, `refactor/*`, `docs/*`); merge para `main` sempre com `git merge --no-ff`.
 
-**Git Hooks**:
-- `pre-commit`: Executa `lint` e `typecheck`
+**Sem assinatura de IA** no rodapé — sem `Co-Authored-By`, sem linha de modelo.
 
 ---
 
@@ -90,7 +89,7 @@ interface Component {
 ```bash
 bun test           # Todos os testes devem passar
 bun run typecheck  # 0 erros TypeScript
-bun run lint       # 0 warnings ESLint
+bun run lint       # tsc --noEmit --strict
 bun run build      # Build deve completar sem erros
 ```
 
