@@ -899,8 +899,11 @@ function renderToolMessage(msg: ChatMessage, width: number): { lines: string[], 
     return renderTaskToolMessage(msg, width);
   }
 
-  const rawName = msg.toolName ?? 'Tool';
-  const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  // O consumidor (voxy-cli) já entrega o display name formatado: nativas
+  // capitalizadas ("Read"/"Bash"), MCP como "filesystem:list_directory (MCP)".
+  // A lib RENDERIZA o nome cru sem re-capitalizar — re-capitalizar quebrava o
+  // header de tools MCP ("Filesystem:..."), divergindo do dialog de permissão.
+  const name = msg.toolName ?? 'Tool';
   const output = msg.toolOutput ?? [];
   const status = msg.toolStatus ?? 'done';
   const collapsed = msg.toolCollapsed !== false;
