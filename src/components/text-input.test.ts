@@ -85,6 +85,37 @@ describe('TextInput', () => {
     expect(t.getValue()).toBe('linha1\nlinha2\nlinha3');
     expect(t.render(80, 10).length).toBe(3);
   });
+
+  test('mask:true renderiza bullets em vez do texto', () => {
+    const t = new TextInput({ mask: true });
+    ['s','e','c','r','e','t'].forEach(c => t.handleKey(key(c, { raw: c })));
+    const out = t.render(80, 1).join('');
+    expect(out).not.toContain('secret');
+    expect(out).toContain('••••••');
+  });
+
+  test('mask:true — getValue retorna o texto real, não mascarado', () => {
+    const t = new TextInput({ mask: true });
+    ['k','e','y'].forEach(c => t.handleKey(key(c, { raw: c })));
+    expect(t.getValue()).toBe('key');
+  });
+
+  test('mask:true — caractere sob o cursor também é mascarado', () => {
+    const t = new TextInput({ mask: true });
+    t.onFocus();
+    ['a','b','c'].forEach(c => t.handleKey(key(c, { raw: c })));
+    t.handleKey(key('left')); // cursor sobre 'c'
+    const out = t.render(80, 1).join('');
+    expect(out).not.toContain('c');     // nenhum glifo real vaza no caret
+    expect(out).toContain('\x1b[7m•');  // reverse-video envolve o bullet, não o 'c'
+    t.dispose();                         // CLAUDE.md: dispose em teste que liga o blink timer
+  });
+
+  test('modo plain (sem mask) permanece byte-idêntico', () => {
+    const plain = new TextInput();
+    ['a','b','c'].forEach(c => plain.handleKey(key(c, { raw: c })));
+    expect(plain.render(80, 1)).toEqual(['> abc']);
+  });
 });
 
 describe('TextInput — cursor blink', () => {

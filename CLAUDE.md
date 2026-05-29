@@ -63,6 +63,7 @@ refactor(core): exporta modificadores ANSI no barrel público
 
 - **Spinner**: construtor POSICIONAL — `new Spinner(label, onUpdate)`, NÃO é options object
 - **TextInput**: `minHeight() === this.lines.length` — ignora `height` passado no `render()`
+- **TextInput**: flag `mask?: boolean` é DISPLAY-ONLY (bullets `•` no render) — `getValue`/`onChange`/`onSubmit` entregam o plaintext real
 - **MessageList / ChatLayout**: `render(width, height)` retorna EXATAMENTE `height` linhas (padding no topo se conteúdo < height, slice se > height)
 - **Renderer**: full redraw threshold = 15% das linhas mudaram. NÃO aumentar sem testar com permission dialog em terminal de 30 linhas
 - **TUI.start()**: faz `ERASE_SCROLLBACK` — opera em buffer primário, não alternativo
