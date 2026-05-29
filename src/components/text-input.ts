@@ -3,6 +3,8 @@ import { RESET, BOLD, FG_CYAN } from '../core/ansi';
 import { measureWidth } from '../utils/width';
 import { stripAnsi } from '../utils/strip-ansi';
 
+const MASK_BULLET = '•';
+
 interface CursorSnapshot {
   lines: string[];
   row: number;
@@ -18,6 +20,8 @@ export interface TextInputOptions {
   submitOnEnter?: boolean;
   /** Placeholder quando vazio. */
   placeholder?: string;
+  /** Mascara o conteúdo exibido com bullets (display-only). Default: false */
+  mask?: boolean;
 }
 
 export class TextInput implements Component {
@@ -44,6 +48,7 @@ export class TextInput implements Component {
       continuationPrompt: options.continuationPrompt ?? '  ',
       submitOnEnter: options.submitOnEnter ?? true,
       placeholder: options.placeholder ?? '',
+      mask: options.mask ?? false,
     };
   }
 
@@ -331,7 +336,7 @@ export class TextInput implements Component {
   // ── Render ────────────────────────────────────────────────────────────────
 
   render(width: number, _height: number): string[] {
-    const { prompt, continuationPrompt, placeholder } = this.options;
+    const { prompt, continuationPrompt, placeholder, mask } = this.options;
 
     // Placeholder quando vazio e sem foco
     if (this.lines.length === 1 && this.lines[0] === '' && !this.focused && placeholder) {
@@ -346,14 +351,15 @@ export class TextInput implements Component {
       if (this.focused && i === this.cursorRow) {
         return prefix + this.renderLineWithCursor(line, available);
       }
-      return prefix + line;
+      return prefix + (mask ? MASK_BULLET.repeat(line.length) : line);
     });
   }
 
   private renderLineWithCursor(line: string, _width: number): string {
-    const before = line.slice(0, this.cursorCol);
-    const cursorChar = line[this.cursorCol] ?? ' ';
-    const after = line.slice(this.cursorCol + 1);
+    const display = this.options.mask ? MASK_BULLET.repeat(line.length) : line;
+    const before = display.slice(0, this.cursorCol);
+    const cursorChar = display[this.cursorCol] ?? ' ';
+    const after = display.slice(this.cursorCol + 1);
 
     if (this.cursorVisible) {
       const cursor = `${BOLD}\x1b[7m${cursorChar}${RESET}`;
